@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131b" />
+    <title>Glass Flip Clock</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f8fbff;
+        --muted: rgba(240, 246, 255, .58);
+        --glass: rgba(22, 28, 43, .38);
+        --glass-edge: rgba(255,255,255,.27);
+        --glass-shine: rgba(255,255,255,.16);
+        --digit: clamp(4.7rem, 19vw, 14rem);
+        --card-w: calc(var(--digit) * .72);
+        --card-h: calc(var(--digit) * 1.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; overflow: hidden; display: grid; place-items: center;
+        font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif;
+        color: var(--ink); background: #0b0d14;
+      }
+      .aurora, .aurora::before, .aurora::after { position: fixed; inset: -25vmax; content: ""; pointer-events: none; }
+      .aurora { background: radial-gradient(circle at 31% 33%, #526ec8 0 7%, transparent 24%), radial-gradient(circle at 71% 62%, #aa5da9 0 5%, transparent 25%), linear-gradient(128deg, #0c1221, #18182b 44%, #17101d); filter: blur(28px); animation: drift 16s ease-in-out infinite alternate; }
+      .aurora::before { background: radial-gradient(circle at 50% 40%, rgba(85, 242, 222, .25), transparent 18%); transform: translate(-12%, 17%); }
+      .aurora::after { background: radial-gradient(circle at 50% 50%, transparent 34%, rgba(0, 0, 0, .42) 91%); }
+      @keyframes drift { to { transform: scale(1.08) rotate(5deg); } }
+      .shell {
+        width: min(92vw, 1060px); padding: clamp(20px, 4vw, 43px); position: relative;
+        border-radius: 39px; border: 1px solid var(--glass-edge);
+        background: linear-gradient(135deg, rgba(255,255,255,.19), rgba(255,255,255,.045) 35%, rgba(255,255,255,.08));
+        box-shadow: 0 30px 90px rgba(0,0,0,.38), inset 0 1px 1px rgba(255,255,255,.35);
+        backdrop-filter: blur(34px) saturate(155%); -webkit-backdrop-filter: blur(34px) saturate(155%);
+      }
+      .shell::before { content:""; position: absolute; inset: 1px; border-radius: 38px; pointer-events:none; background: linear-gradient(116deg, rgba(255,255,255,.15), transparent 28%); }
+      header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: clamp(22px, 5vw, 48px); }
+      .brand { display: flex; align-items: center; gap: 10px; letter-spacing: .13em; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.75); text-transform: uppercase; }
+      .orb { width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(145deg, #fff, #98d4ff 48%, #6478ff); box-shadow: 0 0 20px #8bc8ff; }
+      .date { font-size: 12px; color: var(--muted); font-weight: 550; }
+      .clock { display: flex; align-items: center; justify-content: center; gap: clamp(7px, 1.5vw, 20px); position: relative; }
+      .unit { display: flex; gap: clamp(5px, .9vw, 12px); }
+      .divider { font-size: clamp(2.5rem, 7vw, 6rem); font-family: ui-monospace, monospace; font-weight: 200; color: rgba(255,255,255,.72); transform: translateY(-7%); text-shadow: 0 0 20px rgba(255,255,255,.25); animation: pulse 1s steps(1) infinite; }
+      @keyframes pulse { 50% { opacity: .22; } }
+      .card { position: relative; width: var(--card-w); height: var(--card-h); perspective: 800px; filter: drop-shadow(0 16px 16px rgba(0,0,0,.2)); }
+      .card-base, .half, .flip { position: absolute; left: 0; width: 100%; overflow: hidden; border: 1px solid rgba(255,255,255,.3); background: linear-gradient(135deg, rgba(255,255,255,.2), rgba(255,255,255,.055)); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+      .card-base { inset: 0; border-radius: 20px; box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -1px 1px rgba(0,0,0,.32); }
+      .half, .flip { height: 50%; z-index: 2; }
+      .top, .flip-top { top: 0; border-radius: 20px 20px 4px 4px; border-bottom-color: rgba(0,0,0,.18); }
+      .bottom, .flip-bottom { bottom: 0; border-radius: 4px 4px 20px 20px; border-top-color: rgba(255,255,255,.16); }
+      .number { position: absolute; width: 100%; height: var(--card-h); display: grid; place-items: center; font-family: ui-monospace, "SF Mono", monospace; font-size: var(--digit); font-weight: 500; letter-spacing: -.11em; padding-right: .08em; line-height: 1; color: #fff; text-shadow: 0 2px 7px rgba(0,0,0,.16); }
+      .top .number, .flip-top .number { top: 0; align-items: center; }
+      .bottom .number, .flip-bottom .number { bottom: 0; align-items: center; }
+      .bottom .number, .flip-bottom .number { transform: translateY(-50%); }
+      .top .number, .flip-top .number { transform: translateY(0); }
+      .seam { position: absolute; left: 5%; width: 90%; top: 50%; height: 1px; background: rgba(1,4,12,.34); box-shadow: 0 1px rgba(255,255,255,.12); z-index: 4; }
+      .flip { z-index: 3; transform-style: preserve-3d; backface-visibility: hidden; }
+      .flip-top { transform-origin: bottom; }
+      .flip-bottom { transform-origin: top; transform: rotateX(90deg); }
+      .card.flipping .flip-top { animation: fold .24s ease-in forwards; }
+      .card.flipping .flip-bottom { animation: unfold .28s .24s ease-out forwards; }
+      @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.65); } }
+      @keyframes unfold { to { transform: rotateX(0); } }
+      footer { position: relative; display: flex; justify-content: space-between; align-items: end; margin-top: clamp(22px, 5vw, 45px); color: var(--muted); font-size: 11px; }
+      .seconds { display: flex; gap: 7px; align-items: center; }
+      .seconds strong { font: 600 17px ui-monospace, monospace; color: var(--ink); letter-spacing: .05em; }
+      button { color: inherit; border: 0; background: none; font: inherit; cursor: pointer; padding: 7px 0; opacity: .8; }
+      button:hover { opacity: 1; }
+      @media (max-width: 560px) { .shell { border-radius: 29px; padding: 22px 15px; } .clock { gap: 4px; } .unit { gap: 3px; } .divider { display: none; } header { margin-bottom: 30px; } .card-base, .top, .bottom, .flip { border-radius: 12px; } .top, .flip-top { border-radius: 12px 12px 3px 3px; } .bottom, .flip-bottom { border-radius: 3px 3px 12px 12px; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="aurora"></div>
+    <main class="shell">
+      <header><div class="brand"><i class="orb"></i> Timepiece</div><div class="date" id="date"></div></header>
+      <section class="clock" aria-label="Current time">
+        <div class="unit" id="hours"></div><div class="divider">:</div><div class="unit" id="minutes"></div><div class="divider">:</div><div class="unit" id="seconds"></div>
+      </section>
+      <footer><button id="mode" aria-label="Switch time format">24-hour time</button><div class="seconds">SECONDS <strong id="seconds-label">00</strong></div></footer>
+    </main>
+    <script>
+      const groups = ['hours','minutes','seconds']; let is24 = true;
+      const pad = n => String(n).padStart(2, '0');
+      function makeCard(value) { const card = document.createElement('div'); card.className = 'card'; card.dataset.value = value; card.innerHTML = `<div class="card-base"></div><div class="half top"><span class="number">${value}</span></div><div class="half bottom"><span class="number">${value}</span></div><div class="flip flip-top"><span class="number">${value}</span></div><div class="flip flip-bottom"><span class="number">${value}</span></div><div class="seam"></div>`; return card; }
+      groups.forEach(id => { const el = document.getElementById(id); el.append(makeCard('0'), makeCard('0')); });
+      function setPair(id, value) { const cards = [...document.querySelectorAll('#' + id + ' .card')]; pad(value).split('').forEach((digit, i) => { const card = cards[i]; if (card.dataset.value === digit) return; const flips = card.querySelectorAll('.flip .number'); flips.forEach(n => n.textContent = digit); card.classList.remove('flipping'); void card.offsetWidth; card.classList.add('flipping'); setTimeout(() => { card.querySelectorAll('.half .number').forEach(n => n.textContent = digit); card.dataset.value = digit; card.classList.remove('flipping'); }, 520); }); }
+      function update() { const now = new Date(); let hour = now.getHours(); if (!is24) hour = hour % 12 || 12; setPair('hours', hour); setPair('minutes', now.getMinutes()); setPair('seconds', now.getSeconds()); document.getElementById('seconds-label').textContent = pad(now.getSeconds()); document.getElementById('date').textContent = now.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' }); }
+      document.getElementById('mode').onclick = () => { is24 = !is24; document.getElementById('mode').textContent = is24 ? '24-hour time' : '12-hour time'; update(); };
+      update(); setInterval(update, 1000);
+    </script>
+  </body>
+</html>
