@@ -5,19 +5,24 @@ import CoreText
 
 // MARK: - Font
 
-enum Oswald {
+// "Flip Digits" is Oswald SemiBold with equal-width digits (see fonts/), so a live
+// seconds counter can be clipped to exactly two digits.
+enum Digits {
     static let registered: Bool = {
-        guard let url = Bundle.main.url(forResource: "Oswald-Variable", withExtension: "ttf") else { return false }
+        guard let url = Bundle.main.url(forResource: "FlipDigits-SemiBold", withExtension: "ttf") else { return false }
         return CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }()
 
-    /// Oswald at weight 600, matching the web clock.
-    static func font(_ size: CGFloat) -> Font {
+    static func ctFont(_ size: CGFloat) -> CTFont {
         _ = registered
-        let base = CTFontCreateWithName("Oswald" as CFString, size, nil)
-        let wght: CFNumber = 0x77676874 as CFNumber // 'wght' axis tag
-        let desc = CTFontDescriptorCreateWithAttributes([kCTFontVariationAttribute: [wght: 600]] as CFDictionary)
-        return Font(CTFontCreateCopyWithAttributes(base, size, nil, desc))
+        return CTFontCreateWithName("FlipDigits-SemiBold" as CFString, size, nil)
+    }
+
+    static func font(_ size: CGFloat) -> Font { Font(ctFont(size)) }
+
+    static func width(of text: String, size: CGFloat) -> CGFloat {
+        let attributed = NSAttributedString(string: text, attributes: [kCTFontAttributeName as NSAttributedString.Key: ctFont(size)])
+        return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attributed), nil, nil, nil)
     }
 }
 
@@ -29,6 +34,9 @@ struct ClockConfig: WidgetConfigurationIntent {
 
     @Parameter(title: "24-hour time", default: false)
     var twentyFourHour: Bool
+
+    @Parameter(title: "Seconds", default: false)
+    var showSeconds: Bool
 }
 
 // MARK: - Timeline
@@ -57,11 +65,13 @@ struct ClockProvider: AppIntentTimelineProvider {
 
 // MARK: - Views
 
-struct Card: View {
-    let text: String
+let inkColor = Color(white: 0.725)
+
+struct Card<Content: View>: View {
     let width: CGFloat
     let height: CGFloat
     var period: String? = nil
+    @ViewBuilder let content: () -> Content
 
     private var radius: CGFloat { min(width, height) * 0.085 }
 
@@ -69,21 +79,14 @@ struct Card: View {
         ZStack {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(Color(white: 0.07))
-            // Oswald digits are about 0.47em wide, so two digits need roughly 0.95em of card width.
-            Text(text)
-                .font(Oswald.font(min(height * 0.86, width * 0.88)))
-                .foregroundStyle(Color(white: 0.725))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .id(text)
-                .transition(.push(from: .top))
+            content()
             Rectangle()
                 .fill(.black)
                 .frame(height: max(1.5, height * 0.007))
             if let period {
                 Text(period)
-                    .font(Oswald.font(min(width, height) * 0.085))
-                    .foregroundStyle(Color(white: 0.725))
+                    .font(Digits.font(min(width, height) * 0.085))
+                    .foregroundStyle(inkColor)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, width * 0.06)
                     .padding(.top, height * 0.07)
@@ -91,6 +94,48 @@ struct Card: View {
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
+
+/// Digit size for a card: limited by height, or by width when the card is narrow (two digits ≈ 0.95em).
+func digitSize(width: CGFloat, height: CGFloat) -> CGFloat { min(height * 0.86, width * 0.88) }
+
+struct DigitCard: View {
+    let text: String
+    let width: CGFloat
+    let height: CGFloat
+    var period: String? = nil
+
+    var body: some View {
+        Card(width: width, height: height, period: period) {
+            Text(text)
+                .font(Digits.font(digitSize(width: width, height: height)))
+                .foregroundStyle(inkColor)
+                .lineLimit(1)
+                .id(text)
+                .transition(.push(from: .top))
+        }
+    }
+}
+
+/// Widgets can't redraw every second, but a timer Text ticks live. It counts "0:00, 0:01, …"
+/// from the start of the minute; clipping it to exactly two digits leaves just the seconds.
+struct SecondsCard: View {
+    let minuteStart: Date
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        let size = digitSize(width: width, height: height)
+        Card(width: width, height: height) {
+            Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
+                .font(Digits.font(size))
+                .foregroundStyle(inkColor)
+                .lineLimit(1)
+                .multilineTextAlignment(.trailing)
+                .frame(width: Digits.width(of: "00", size: size), alignment: .trailing)
+                .clipped()
+        }
     }
 }
 
@@ -110,21 +155,24 @@ struct ClockView: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
+            let count: CGFloat = entry.config.showSeconds ? 3 : 2
             // The small widget is square, so stack the cards; every other size puts them side by side.
-            // The two cards fill the whole widget, whatever its shape.
+            // The cards fill the whole widget, whatever its shape.
             let stacked = family == .systemSmall
             let gap = max(6, min(w, h) * 0.05)
             if stacked {
-                let ch = (h - gap) / 2
+                let ch = (h - gap * (count - 1)) / count
                 VStack(spacing: gap) {
-                    Card(text: hour, width: w, height: ch, period: period)
-                    Card(text: minute, width: w, height: ch)
+                    DigitCard(text: hour, width: w, height: ch, period: period)
+                    DigitCard(text: minute, width: w, height: ch)
+                    if entry.config.showSeconds { SecondsCard(minuteStart: entry.date, width: w, height: ch) }
                 }
             } else {
-                let cw = (w - gap) / 2
+                let cw = (w - gap * (count - 1)) / count
                 HStack(spacing: gap) {
-                    Card(text: hour, width: cw, height: h, period: period)
-                    Card(text: minute, width: cw, height: h)
+                    DigitCard(text: hour, width: cw, height: h, period: period)
+                    DigitCard(text: minute, width: cw, height: h)
+                    if entry.config.showSeconds { SecondsCard(minuteStart: entry.date, width: cw, height: h) }
                 }
             }
         }
@@ -142,7 +190,7 @@ struct FlipClockWidget: Widget {
                 .containerBackground(.black, for: .widget)
         }
         .configurationDisplayName("Flip Clock")
-        .description("A big black-and-white flip clock.")
+        .description("A big black-and-white flip clock. Options: 24-hour time, seconds.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
         .contentMarginsDisabled()
     }
