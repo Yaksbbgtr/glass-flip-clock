@@ -59,15 +59,19 @@ struct ClockProvider: AppIntentTimelineProvider {
 
 struct Card: View {
     let text: String
-    let size: CGFloat
+    let width: CGFloat
+    let height: CGFloat
     var period: String? = nil
+
+    private var radius: CGFloat { min(width, height) * 0.085 }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: size * 0.085, style: .continuous)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(Color(white: 0.07))
+            // Oswald digits are about 0.47em wide, so two digits need roughly 0.95em of card width.
             Text(text)
-                .font(Oswald.font(size * 0.86))
+                .font(Oswald.font(min(height * 0.86, width * 0.88)))
                 .foregroundStyle(Color(white: 0.725))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -75,18 +79,18 @@ struct Card: View {
                 .transition(.push(from: .top))
             Rectangle()
                 .fill(.black)
-                .frame(height: max(1.5, size * 0.007))
+                .frame(height: max(1.5, height * 0.007))
             if let period {
                 Text(period)
-                    .font(Oswald.font(size * 0.085))
+                    .font(Oswald.font(min(width, height) * 0.085))
                     .foregroundStyle(Color(white: 0.725))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.leading, size * 0.07)
-                    .padding(.top, size * 0.08)
+                    .padding(.leading, width * 0.06)
+                    .padding(.top, height * 0.07)
             }
         }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.085, style: .continuous))
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 
@@ -105,24 +109,26 @@ struct ClockView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let stacked = family == .systemSmall
-            let gapRatio: CGFloat = stacked ? 0.05 : 0.08
             let w = geo.size.width, h = geo.size.height
-            // Two square cards that fill the widget: side by side, or stacked in the small size.
-            let size = stacked
-                ? min(w, h / (2 + gapRatio))
-                : min(h, w / (2 + gapRatio))
-            let gap = size * gapRatio
-            Group {
-                if stacked {
-                    VStack(spacing: gap) { Card(text: hour, size: size, period: period); Card(text: minute, size: size) }
-                } else {
-                    HStack(spacing: gap) { Card(text: hour, size: size, period: period); Card(text: minute, size: size) }
+            // The small widget is square, so stack the cards; every other size puts them side by side.
+            // The two cards fill the whole widget, whatever its shape.
+            let stacked = family == .systemSmall
+            let gap = max(6, min(w, h) * 0.05)
+            if stacked {
+                let ch = (h - gap) / 2
+                VStack(spacing: gap) {
+                    Card(text: hour, width: w, height: ch, period: period)
+                    Card(text: minute, width: w, height: ch)
+                }
+            } else {
+                let cw = (w - gap) / 2
+                HStack(spacing: gap) {
+                    Card(text: hour, width: cw, height: h, period: period)
+                    Card(text: minute, width: cw, height: h)
                 }
             }
-            .frame(width: w, height: h)
         }
-        .padding(family == .systemSmall ? 10 : 14)
+        .padding(8)
         .animation(.easeInOut(duration: 0.5), value: entry.date)
     }
 }
@@ -137,7 +143,7 @@ struct FlipClockWidget: Widget {
         }
         .configurationDisplayName("Flip Clock")
         .description("A big black-and-white flip clock.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
         .contentMarginsDisabled()
     }
 }
