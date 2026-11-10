@@ -9,11 +9,18 @@ import WidgetKit
 struct WidgetSettingsView: View {
     @State private var settings = WidgetSettings.load()
 
+    /// Saves and asks macOS to redraw the widget. Called once per change (not on every slider tick),
+    /// because macOS rations widget refreshes and starts delaying them if they come too fast.
+    private func apply() {
+        try? settings.save()
+        WidgetCenter.shared.reloadTimelines(ofKind: "FlipClock")
+    }
+
     var body: some View {
         Form {
             Section("Look") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Slider(value: $settings.solidity, in: 0...1) {
+                    Slider(value: $settings.solidity, in: 0...1, onEditingChanged: { editing in if !editing { apply() } }) {
                         Text("Look")
                     } minimumValueLabel: {
                         Text("Clear")
@@ -21,32 +28,24 @@ struct WidgetSettingsView: View {
                         Text("Solid")
                     }
                     .labelsHidden()
-                    Text("Clear is see-through glass with white digits. Solid is black with grey digits, like the app.")
+                    Text("Clear is see-through with white digits. Solid is black with grey digits, like the app. Takes effect when you let go of the slider.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
             Section("Time") {
-                Toggle("24-hour time", isOn: $settings.twentyFourHour)
-                Toggle("Seconds", isOn: $settings.showSeconds)
+                Toggle("24-hour time", isOn: $settings.twentyFourHour).onChange(of: settings.twentyFourHour) { apply() }
+                Toggle("Seconds", isOn: $settings.showSeconds).onChange(of: settings.showSeconds) { apply() }
             }
             Section {
-                Text("To put the widget on your desktop: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.")
+                Text("Add the widget: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.\n\nmacOS dims widgets and pauses their live text while another app is in front, so the seconds only tick when the desktop is active. For the widget to always look like the app: System Settings → Desktop & Dock → Widgets → Widget style → Full color.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 360)
-        .onChange(of: settings) { _, new in
-            try? new.save()
-            WidgetCenter.shared.reloadAllTimelines()
-        }
+        .frame(width: 440, height: 440)
     }
 }
 
-
-/// A web view normally swallows every mouse-down, so dragging the black background
-/// did nothing. Letting AppKit treat those drags as window moves fixes that; plain
-/// clicks still reach the page (the menu and switches keep working).
 final class DraggableWebView: WKWebView {
     override var mouseDownCanMoveWindow: Bool { true }
 }
@@ -160,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @objc func showWidgetSettings() {
         if settingsWindow == nil {
-            let size = NSSize(width: 440, height: 360)
+            let size = NSSize(width: 440, height: 440)
             let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "Widget Settings"
             let host = NSHostingView(rootView: WidgetSettingsView())

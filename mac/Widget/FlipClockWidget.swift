@@ -114,7 +114,7 @@ struct Layout {
             digit = min(ch * 0.86, size.width * 0.88)
         } else {
             // The gap holds a colon, so it scales with the card height.
-            let gap = max(10, min(size.height * 0.22, size.width * 0.08))
+            let gap = max(10, min(size.height * 0.17, size.width * 0.065))
             let cw = (size.width - gap * (n - 1)) / n
             cards = (0..<count).map { CGRect(x: CGFloat($0) * (cw + gap), y: 0, width: cw, height: size.height) }
             colons = (1..<count).map { CGPoint(x: CGFloat($0) * (cw + gap) - gap / 2, y: size.height / 2) }
@@ -129,16 +129,14 @@ struct Layout {
 struct Look {
     let solidity: Double
     var t: Double { min(max(solidity, 0), 1) }
-    /// Card fill: barely-there glass at 0, the app's near-black at 1.
-    var card: Color { Color(white: 1 - 0.93 * t).opacity(0.10 + 0.90 * t) }
-    /// A faint outline keeps the card shape readable when the fill is nearly invisible.
-    var cardStroke: Color { Color.white.opacity(0.35 * (1 - t)) }
+    /// Card fill: faint glass at 0, the app's near-black at 1.
+    var card: Color { Color(white: 1 - 0.93 * t).opacity(0.12 + 0.88 * t) }
     /// Digits: pure white on glass, the app's light grey on black.
     var ink: Color { Color(white: 1 - 0.275 * t) }
     /// The widget's own background: fully transparent at 0, black at 1.
     var background: Color { t < 0.02 ? .clear : Color.black.opacity(t) }
-    /// The gap line across each card: a light line on glass, black on the solid cards.
-    var seam: Color { t < 0.5 ? Color.white.opacity(0.35 * (1 - 2 * t)) : Color.black.opacity(2 * t - 1) }
+    /// The gap line across each card, as in the app.
+    var seam: Color { Color.black.opacity(0.4 + 0.6 * t) }
 }
 
 struct TimeParts {
@@ -162,6 +160,7 @@ struct Picture: View {
     let layout: Layout
     let look: Look
     let size: CGSize
+    var seams = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -169,7 +168,6 @@ struct Picture: View {
                 let radius = min(rect.width, rect.height) * 0.085
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(look.card)
-                    .strokeBorder(look.cardStroke, lineWidth: 1)
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
                 if i < 2 {
@@ -178,9 +176,11 @@ struct Picture: View {
                         .foregroundStyle(look.ink)
                         .position(x: rect.midX, y: rect.midY)
                 }
-                Rectangle().fill(look.seam)
-                    .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
-                    .position(x: rect.midX, y: rect.midY)
+                if seams {
+                    Rectangle().fill(look.seam)
+                        .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                        .position(x: rect.midX, y: rect.midY)
+                }
             }
             if let p = time.period, let rect = layout.cards.first {
                 let s = min(rect.width, rect.height)
@@ -242,12 +242,16 @@ struct ClockView: View {
     var body: some View {
         GeometryReader { geo in
             let settings = entry.settings
+            // While another app is in front, macOS shows widgets as a dimmed two-tone snapshot:
+            // live text can't tick there, so the seconds card is left out until the desktop is active again.
+            let accented = renderingMode == .accented
+            let showSeconds = settings.showSeconds && !accented
             let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour)
-            let count = settings.showSeconds ? 3 : 2
+            let count = showSeconds ? 3 : 2
             let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
             let look = Look(solidity: settings.solidity)
-            let picture = Picture(time: time, layout: layout, look: look, size: geo.size)
-            let key = "\(time.hour)|\(time.minute)|\(time.period ?? "")|\(count)|\(Int(geo.size.width))x\(Int(geo.size.height))|\(displayScale)|\(look.t)"
+            let picture = Picture(time: time, layout: layout, look: look, size: geo.size, seams: !accented)
+            let key = "\(time.hour)|\(time.minute)|\(time.period ?? "")|\(count)|\(Int(geo.size.width))x\(Int(geo.size.height))|\(displayScale)|\(look.t)|\(accented)"
             ZStack(alignment: .topLeading) {
                 if let cg = PictureCache.render(picture, scale: displayScale, key: key) {
                     Image(decorative: cg, scale: displayScale)
@@ -257,16 +261,12 @@ struct ClockView: View {
                 } else {
                     picture
                 }
-                if settings.showSeconds, let rect = layout.cards.last {
-                    // Live text can't be part of the picture. In monochrome mode the system tints it white.
-                    SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit,
-                                   color: renderingMode == .accented ? .white : look.ink)
-                        .widgetAccentable()
-                    if renderingMode != .accented {
-                        Rectangle().fill(look.seam)
-                            .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
-                            .position(x: rect.midX, y: rect.midY)
-                    }
+                if showSeconds, let rect = layout.cards.last {
+                    // Live text can't be part of the picture.
+                    SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit, color: look.ink)
+                    Rectangle().fill(look.seam)
+                        .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                        .position(x: rect.midX, y: rect.midY)
                 }
             }
         }
