@@ -67,31 +67,49 @@ struct ClockProvider: AppIntentTimelineProvider {
 
 let inkColor = Color(white: 0.725)
 
+/// macOS draws desktop widgets in "accented" (monochrome) mode whenever another app is in front.
+/// In that mode only the *shape* (alpha) of the content is used, so solid grey digits on a solid
+/// card both become the same frosted fill and the time disappears. Here the card is made
+/// translucent and the digits opaque, so the digits stay visible as bright shapes.
+struct Palette {
+    let accented: Bool
+    var card: Color { accented ? Color.white.opacity(0.22) : Color(white: 0.07) }
+    var ink: Color { accented ? .white : inkColor }
+}
+
 struct Card<Content: View>: View {
     let width: CGFloat
     let height: CGFloat
     var period: String? = nil
     @ViewBuilder let content: () -> Content
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     private var radius: CGFloat { min(width, height) * 0.085 }
 
     var body: some View {
+        let palette = Palette(accented: renderingMode == .accented)
         ZStack {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(Color(white: 0.07))
+                .fill(palette.card)
             content()
-            Rectangle()
-                .fill(.black)
-                .frame(height: max(1.5, height * 0.007))
+                .foregroundStyle(palette.ink)
+                .widgetAccentable()
             if let period {
                 Text(period)
                     .font(Digits.font(min(width, height) * 0.085))
-                    .foregroundStyle(inkColor)
+                    .foregroundStyle(palette.ink)
+                    .widgetAccentable()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, width * 0.06)
                     .padding(.top, height * 0.07)
             }
+            // The seam is cut out of the card (and digits) rather than painted on,
+            // so it reads as a gap in both colour and monochrome modes.
+            Rectangle()
+                .frame(height: max(1.5, height * 0.007))
+                .blendMode(.destinationOut)
         }
+        .compositingGroup()
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
@@ -110,7 +128,6 @@ struct DigitCard: View {
         Card(width: width, height: height, period: period) {
             Text(text)
                 .font(Digits.font(digitSize(width: width, height: height)))
-                .foregroundStyle(inkColor)
                 .lineLimit(1)
                 .id(text)
                 .transition(.push(from: .top))
@@ -130,7 +147,6 @@ struct SecondsCard: View {
         Card(width: width, height: height) {
             Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
                 .font(Digits.font(size))
-                .foregroundStyle(inkColor)
                 .lineLimit(1)
                 .multilineTextAlignment(.trailing)
                 .frame(width: Digits.width(of: "00", size: size), alignment: .trailing)
