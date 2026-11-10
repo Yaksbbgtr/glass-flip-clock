@@ -20,13 +20,11 @@ struct WidgetSettingsView: View {
         Form {
             Section("Look") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Slider(value: $settings.solidity, in: 0...1, onEditingChanged: { editing in if !editing { apply() } }) {
-                        Text("Look")
-                    } minimumValueLabel: {
-                        Text("Clear")
-                    } maximumValueLabel: {
-                        Text("Solid")
-                    }
+                    Slider(value: $settings.solidity, in: 0...1,
+                           label: { Text("Look") },
+                           minimumValueLabel: { Text("Clear") },
+                           maximumValueLabel: { Text("Solid") },
+                           onEditingChanged: { editing in if !editing { apply() } })
                     .labelsHidden()
                     Text("Clear is see-through with white digits. Solid is black with grey digits, like the app. Takes effect when you let go of the slider.")
                         .font(.callout).foregroundStyle(.secondary)
