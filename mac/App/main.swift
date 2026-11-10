@@ -2,6 +2,13 @@ import AppKit
 import WebKit
 import ServiceManagement
 
+/// A web view normally swallows every mouse-down, so dragging the black background
+/// did nothing. Letting AppKit treat those drags as window moves fixes that; plain
+/// clicks still reach the page (the menu and switches keep working).
+final class DraggableWebView: WKWebView {
+    override var mouseDownCanMoveWindow: Bool { true }
+}
+
 final class ClockWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -43,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.appearance = NSAppearance(named: .darkAqua)
         window.center()
 
-        webView = WKWebView(frame: frame, configuration: WKWebViewConfiguration())
+        webView = DraggableWebView(frame: frame, configuration: WKWebViewConfiguration())
         webView.autoresizingMask = [.width, .height]
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = .black
