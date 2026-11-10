@@ -2,168 +2,137 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <title>Flip Clock</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600&display=swap" rel="stylesheet" />
     <style>
       :root {
         color-scheme: dark;
-        --ink: #f5f5f2;
-        --muted: rgba(245, 245, 242, .5);
-        --line: rgba(245, 245, 242, .85);
-        --card-bg: #0d0d0d;
-        /* Card size is driven by the viewport (width and height) so six cards + dividers always fit. */
-        --card-w: min(10.5vw, 26vh, 120px);
-        --card-h: calc(var(--card-w) * 1.5);
-        --digit: calc(var(--card-w) * 1.22);
-        --radius: 3px;
-        --flip-ms: 520ms;
-        --type: "Courier Prime", "Courier New", Courier, monospace;
+        --bg: #000;
+        --card: #121212;
+        --ink: #b9b9b9;
+        /* Two square cards side by side in landscape; stacked in portrait. */
+        --size: min(42vw, 78vh);
+        --radius: calc(var(--size) * .085);
+        --seam: max(2px, calc(var(--size) * .007));
+        --flip-ms: 600ms;
+        --type: "Oswald", "Bebas Neue", "Helvetica Neue Condensed Bold", "Arial Narrow", Impact, sans-serif;
       }
+      @media (orientation: portrait) { :root { --size: min(82vw, 43vh); } }
       * { box-sizing: border-box; }
+      html, body { height: 100%; }
       body {
-        margin: 0; min-height: 100vh; min-height: 100dvh; overflow: hidden; display: grid; place-items: center;
-        font-family: var(--type); color: var(--ink); background: #000;
+        margin: 0; overflow: hidden; display: grid; place-items: center;
+        background: var(--bg); font-family: var(--type); color: var(--ink);
+        -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
       }
-      .shell { width: min(92vw, 1060px); padding: clamp(20px, 4vw, 43px) 0; position: relative; }
-      header, footer { position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; }
-      header { padding-bottom: 14px; border-bottom: 1px solid var(--muted); margin-bottom: clamp(28px, 6vw, 56px); }
-      footer { padding-top: 14px; border-top: 1px solid var(--muted); margin-top: clamp(28px, 6vw, 56px); color: var(--muted); }
-      .brand { font-weight: 700; color: var(--ink); }
-      .date { color: var(--muted); text-align: right; }
-      .clock { display: flex; align-items: center; justify-content: center; gap: clamp(6px, 1.5vw, 20px); position: relative; }
-      .unit { display: flex; gap: clamp(4px, .9vw, 12px); }
-      .divider { font-size: calc(var(--card-w) * .6); font-family: var(--type); line-height: 1; color: var(--ink); animation: pulse 1s steps(1) infinite; }
-      @keyframes pulse { 50% { opacity: .2; } }
-      .card { position: relative; flex: none; width: var(--card-w); height: var(--card-h); perspective: calc(var(--card-h) * 4); }
-      .half, .flip { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: var(--card-bg); border: 1px solid var(--line); z-index: 2; }
-      .card-base { display: none; }
-      .top, .flip-top { top: 0; border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
-      .bottom, .flip-bottom { bottom: 0; border-top: 0; border-radius: 0 0 var(--radius) var(--radius); }
-      /* Each half holds a full-height digit and clips it. The -1px offsets cancel the half's border so both halves line up at the seam. */
-      .number { position: absolute; left: -1px; right: -1px; height: var(--card-h); display: grid; place-items: center; font-family: var(--type); font-size: var(--digit); font-weight: 400; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-      .top .number, .flip-top .number { top: -1px; }
-      .bottom .number, .flip-bottom .number { bottom: -1px; }
-      .seam { position: absolute; left: 0; width: 100%; top: calc(50% - .5px); height: 1px; background: #000; z-index: 4; }
+      .clock {
+        display: flex; gap: calc(var(--size) * .08); align-items: center; justify-content: center;
+        border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+      }
+      @media (orientation: portrait) { .clock { flex-direction: column; gap: calc(var(--size) * .05); } }
+      .clock:focus-visible { outline: 1px solid #444; outline-offset: 12px; border-radius: var(--radius); }
+
+      .card { position: relative; width: var(--size); height: var(--size); perspective: calc(var(--size) * 4); }
+      .half, .flip { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: var(--card); }
+      .top, .flip-top { top: 0; border-radius: var(--radius) var(--radius) 0 0; }
+      .bottom, .flip-bottom { bottom: 0; border-radius: 0 0 var(--radius) var(--radius); }
+      /* Each half holds a full-height number and clips it, so the halves meet exactly at the seam. */
+      .number {
+        position: absolute; left: 0; right: 0; height: var(--size);
+        display: grid; place-items: center;
+        font-size: calc(var(--size) * .86); font-weight: 600; line-height: 1; letter-spacing: -.01em;
+        font-variant-numeric: tabular-nums; color: var(--ink);
+      }
+      .top .number, .flip-top .number { top: 0; }
+      .bottom .number, .flip-bottom .number { bottom: 0; }
+      .seam { position: absolute; left: 0; right: 0; top: calc(50% - var(--seam) / 2); height: var(--seam); background: var(--bg); z-index: 4; }
+      .period { position: absolute; z-index: 5; left: 7%; top: 9%; font-size: calc(var(--size) * .085); line-height: 1; letter-spacing: .01em; }
+      .period:empty { display: none; }
+
       .flip { z-index: 3; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
       .flip-top { transform-origin: bottom; }
       .flip-bottom { transform-origin: top; transform: rotateX(90deg); }
-      .card.flipping .flip-top { animation: fold calc(var(--flip-ms) * .46) ease-in forwards; }
-      .card.flipping .flip-bottom { animation: unfold calc(var(--flip-ms) * .54) calc(var(--flip-ms) * .46) ease-out forwards; }
-      @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.5); } }
-      @keyframes unfold { to { transform: rotateX(0); } }
-      .zone { display: flex; gap: 10px; align-items: baseline; }
-      .zone strong { font-weight: 700; color: var(--ink); }
-      .zone strong:empty { display: none; }
-      button { color: inherit; border: 0; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; padding: 4px 0; }
-      button:hover { color: var(--ink); }
-      button:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+      .card.flipping .flip-top { animation: fold calc(var(--flip-ms) * .5) ease-in forwards; }
+      .card.flipping .flip-bottom { animation: unfold calc(var(--flip-ms) * .5) calc(var(--flip-ms) * .5) ease-out forwards; }
+      @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.45); } }
+      @keyframes unfold { from { filter: brightness(.6); } to { transform: rotateX(0); filter: none; } }
+
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-      @media (max-width: 560px) {
-        :root { --card-w: min(calc((92vw - 40px) / 6), 26vh); }
-        header, footer { font-size: 10px; letter-spacing: .14em; }
-        .clock { gap: 8px; } .unit { gap: 3px; } .divider { display: none; }
-      }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; } }
     </style>
   </head>
   <body>
-    <main class="shell">
-      <header><div class="brand">Timepiece</div><div class="date" id="date"></div></header>
-      <section class="clock" aria-label="Current time">
-        <span class="sr-only" id="sr-time" aria-live="off"></span>
-        <div class="unit" id="hours"></div><div class="divider" aria-hidden="true">:</div><div class="unit" id="minutes"></div><div class="divider" aria-hidden="true">:</div><div class="unit" id="seconds"></div>
-      </section>
-      <footer><button id="mode" type="button" aria-pressed="true">24-hour time</button><div class="zone"><strong id="period"></strong><span id="tz"></span></div></footer>
-    </main>
+    <button class="clock" id="clock" type="button" aria-label="Current time. Press to switch between 12 and 24 hour time.">
+      <span class="sr-only" id="sr-time"></span>
+      <span class="card" id="hours" aria-hidden="true"><span class="period" id="period"></span></span>
+      <span class="card" id="minutes" aria-hidden="true"></span>
+    </button>
     <script>
       const pad = n => String(n).padStart(2, '0');
-      const FLIP_MS = 520;
+      const FLIP_MS = 600;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      const cards = {};
 
-      let is24 = true;
-      try { is24 = localStorage.getItem('clock-format') !== '12'; } catch (e) {}
+      let is24 = false;
+      try { is24 = localStorage.getItem('clock-format') === '24'; } catch (e) {}
 
-      function makeCard(digit) {
-        const el = document.createElement('div');
-        el.className = 'card';
-        el.setAttribute('aria-hidden', 'true');
-        el.innerHTML = `<div class="card-base"></div><div class="half top"><span class="number"></span></div><div class="half bottom"><span class="number"></span></div><div class="flip flip-top"><span class="number"></span></div><div class="flip flip-bottom"><span class="number"></span></div><div class="seam"></div>`;
+      function makeCard(el, value) {
+        el.insertAdjacentHTML('afterbegin', `<span class="half top"><span class="number"></span></span><span class="half bottom"><span class="number"></span></span><span class="flip flip-top"><span class="number"></span></span><span class="flip flip-bottom"><span class="number"></span></span><span class="seam"></span>`);
         const n = sel => el.querySelector(sel + ' .number');
-        const card = { el, value: digit, timer: 0, top: n('.top'), bottom: n('.bottom'), flipTop: n('.flip-top'), flipBottom: n('.flip-bottom') };
-        setAll(card, digit);
+        const card = { el, value, timer: 0, top: n('.top'), bottom: n('.bottom'), flipTop: n('.flip-top'), flipBottom: n('.flip-bottom') };
+        setAll(card, value);
         return card;
       }
 
-      function setAll(card, digit) {
-        card.top.textContent = card.bottom.textContent = card.flipTop.textContent = card.flipBottom.textContent = digit;
-      }
+      function setAll(card, v) { card.top.textContent = card.bottom.textContent = card.flipTop.textContent = card.flipBottom.textContent = v; }
 
-      // Real flip: the upper flap carries the OLD digit down and reveals the NEW digit behind it,
-      // then the lower flap lands with the NEW digit over the old lower half.
-      function flipTo(card, digit) {
-        if (card.value === digit) return;
+      // The upper flap carries the old value down and reveals the new one behind it,
+      // then the lower flap lands with the new value over the old lower half.
+      function flipTo(card, v) {
+        if (card.value === v) return;
         const old = card.value;
-        card.value = digit;
+        card.value = v;
         clearTimeout(card.timer);
         card.el.classList.remove('flipping');
-        if (reduceMotion.matches || document.hidden) { setAll(card, digit); return; }
-        card.top.textContent = digit;
+        if (reduceMotion.matches || document.hidden) { setAll(card, v); return; }
+        card.top.textContent = v;
         card.flipTop.textContent = old;
-        card.flipBottom.textContent = digit;
+        card.flipBottom.textContent = v;
         card.bottom.textContent = old;
-        void card.el.offsetWidth; // restart the animation
+        void card.el.offsetWidth;
         card.el.classList.add('flipping');
         card.timer = setTimeout(() => {
-          card.bottom.textContent = card.flipTop.textContent = digit;
+          card.bottom.textContent = card.flipTop.textContent = v;
           card.el.classList.remove('flipping');
-          card.timer = 0;
         }, FLIP_MS);
       }
 
-      function setPair(id, value) { pad(value).split('').forEach((d, i) => flipTo(cards[id][i], d)); }
+      const hourText = now => { const h = now.getHours(); return is24 ? pad(h) : String(h % 12 || 12); };
+      const minuteText = now => pad(now.getMinutes());
 
-      function hourValue(now) { const h = now.getHours(); return is24 ? h : (h % 12 || 12); }
+      const start = new Date();
+      const hours = makeCard(document.getElementById('hours'), hourText(start));
+      const minutes = makeCard(document.getElementById('minutes'), minuteText(start));
 
       function render(now) {
-        setPair('hours', hourValue(now));
-        setPair('minutes', now.getMinutes());
-        setPair('seconds', now.getSeconds());
+        flipTo(hours, hourText(now));
+        flipTo(minutes, minuteText(now));
         const period = now.getHours() < 12 ? 'AM' : 'PM';
         document.getElementById('period').textContent = is24 ? '' : period;
-        document.getElementById('sr-time').textContent = `${pad(hourValue(now))}:${pad(now.getMinutes())}${is24 ? '' : ' ' + period}`;
-        document.getElementById('date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-        const tz = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(now).find(p => p.type === 'timeZoneName');
-        document.getElementById('tz').textContent = tz ? tz.value : '';
+        document.getElementById('sr-time').textContent = `${hourText(now)}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
       }
 
-      function renderMode() {
-        const btn = document.getElementById('mode');
-        btn.textContent = is24 ? '24-hour time' : '12-hour time';
-        btn.setAttribute('aria-pressed', String(is24));
-      }
-
-      // Build the cards already showing the current time, so nothing flips on page load.
-      const start = new Date();
-      [['hours', hourValue(start)], ['minutes', start.getMinutes()], ['seconds', start.getSeconds()]].forEach(([id, v]) => {
-        cards[id] = pad(v).split('').map(makeCard);
-        document.getElementById(id).append(...cards[id].map(c => c.el));
-      });
-
-      document.getElementById('mode').addEventListener('click', () => {
+      document.getElementById('clock').addEventListener('click', () => {
         is24 = !is24;
         try { localStorage.setItem('clock-format', is24 ? '24' : '12'); } catch (e) {}
-        renderMode();
         render(new Date());
       });
 
-      // Tick right after each second boundary instead of a drifting setInterval.
+      // Tick just after each second boundary so the minute flips on time.
       function tick() { render(new Date()); setTimeout(tick, 1000 - (Date.now() % 1000) + 10); }
-      renderMode();
       tick();
     </script>
   </body>
