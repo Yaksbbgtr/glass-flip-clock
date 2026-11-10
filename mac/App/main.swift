@@ -30,7 +30,7 @@ struct WidgetSettingsView: View {
                 Toggle("Seconds", isOn: $settings.showSeconds)
             }
             Section {
-                Text("To put the widget on your desktop: right-click the desktop → Edit Widgets… → Flip Clock.")
+                Text("To put the widget on your desktop: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }

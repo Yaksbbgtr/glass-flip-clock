@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
 import CoreText
 
 // MARK: - Font
@@ -25,6 +26,49 @@ enum Digits {
     }
 }
 
+// MARK: - Per-widget options (right-click the widget → Edit "Flip Clock")
+// Each one defaults to "Use app setting", i.e. whatever Flip Clock → Widget Settings says,
+// so a single widget can override the app without changing the others.
+
+enum LookChoice: String, AppEnum {
+    case app, clear, solid
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Look")
+    static var caseDisplayRepresentations: [LookChoice: DisplayRepresentation] = [
+        .app: "Use app setting (slider)", .clear: "Clear", .solid: "Solid",
+    ]
+}
+
+enum OnOffChoice: String, AppEnum {
+    case app, off, on
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Setting")
+    static var caseDisplayRepresentations: [OnOffChoice: DisplayRepresentation] = [
+        .app: "Use app setting", .off: "Off", .on: "On",
+    ]
+}
+
+struct ClockConfig: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Flip Clock"
+    static var description = IntentDescription("Override the app's Widget Settings for this widget.")
+
+    @Parameter(title: "Look", default: .app)
+    var look: LookChoice
+
+    @Parameter(title: "24-hour time", default: .app)
+    var twentyFourHour: OnOffChoice
+
+    @Parameter(title: "Seconds", default: .app)
+    var seconds: OnOffChoice
+
+    /// The app's settings with this widget's overrides applied.
+    func resolved(over base: WidgetSettings) -> WidgetSettings {
+        var s = base
+        switch look { case .clear: s.solidity = 0; case .solid: s.solidity = 1; case .app: break }
+        switch twentyFourHour { case .on: s.twentyFourHour = true; case .off: s.twentyFourHour = false; case .app: break }
+        switch seconds { case .on: s.showSeconds = true; case .off: s.showSeconds = false; case .app: break }
+        return s
+    }
+}
+
 // MARK: - Timeline
 
 struct ClockEntry: TimelineEntry {
@@ -32,23 +76,23 @@ struct ClockEntry: TimelineEntry {
     let settings: WidgetSettings
 }
 
-struct ClockProvider: TimelineProvider {
+struct ClockProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> ClockEntry { ClockEntry(date: .now, settings: WidgetSettings()) }
-    func getSnapshot(in context: Context, completion: @escaping (ClockEntry) -> Void) {
-        completion(ClockEntry(date: .now, settings: WidgetSettings.load()))
+    func snapshot(for config: ClockConfig, in context: Context) async -> ClockEntry {
+        ClockEntry(date: .now, settings: config.resolved(over: WidgetSettings.load()))
     }
 
     // One entry per minute for the next two hours; WidgetKit shows each at the right moment
     // and asks for a fresh timeline when they run out (or when the app changes the settings).
-    func getTimeline(in context: Context, completion: @escaping (Timeline<ClockEntry>) -> Void) {
-        let settings = WidgetSettings.load()
+    func timeline(for config: ClockConfig, in context: Context) async -> Timeline<ClockEntry> {
+        let settings = config.resolved(over: WidgetSettings.load())
         let cal = Calendar.current
         let start = cal.dateInterval(of: .minute, for: .now)?.start ?? .now
         let entries = (0..<120).compactMap { i -> ClockEntry? in
             guard let d = cal.date(byAdding: .minute, value: i, to: start) else { return nil }
             return ClockEntry(date: d, settings: settings)
         }
-        completion(Timeline(entries: entries, policy: .atEnd))
+        return Timeline(entries: entries, policy: .atEnd)
     }
 }
 
@@ -231,12 +275,12 @@ struct ClockView: View {
 
 struct FlipClockWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "FlipClock", provider: ClockProvider()) { entry in
+        AppIntentConfiguration(kind: "FlipClock", intent: ClockConfig.self, provider: ClockProvider()) { entry in
             ClockView(entry: entry)
                 .containerBackground(for: .widget) { Look(solidity: entry.settings.solidity).background }
         }
         .configurationDisplayName("Flip Clock")
-        .description("A big flip clock. Change its look in Flip Clock → Widget Settings.")
+        .description("A big flip clock. Set its look in Flip Clock → Widget Settings, or override it here.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
         .contentMarginsDisabled()
     }
