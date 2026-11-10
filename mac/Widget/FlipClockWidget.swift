@@ -129,14 +129,16 @@ struct Layout {
 struct Look {
     let solidity: Double
     var t: Double { min(max(solidity, 0), 1) }
-    /// Card fill: translucent white glass at 0, the app's near-black at 1.
-    var card: Color { Color(white: 1 - 0.93 * t).opacity(0.22 + 0.78 * t) }
+    /// Card fill: barely-there glass at 0, the app's near-black at 1.
+    var card: Color { Color(white: 1 - 0.93 * t).opacity(0.10 + 0.90 * t) }
+    /// A faint outline keeps the card shape readable when the fill is nearly invisible.
+    var cardStroke: Color { Color.white.opacity(0.35 * (1 - t)) }
     /// Digits: pure white on glass, the app's light grey on black.
     var ink: Color { Color(white: 1 - 0.275 * t) }
-    /// The widget's own background: invisible at 0, black at 1.
-    var background: Color { Color.black.opacity(t) }
-    /// The gap line across each card.
-    var seam: Color { Color.black.opacity(0.35 + 0.65 * t) }
+    /// The widget's own background: fully transparent at 0, black at 1.
+    var background: Color { t < 0.02 ? .clear : Color.black.opacity(t) }
+    /// The gap line across each card: a light line on glass, black on the solid cards.
+    var seam: Color { t < 0.5 ? Color.white.opacity(0.35 * (1 - 2 * t)) : Color.black.opacity(2 * t - 1) }
 }
 
 struct TimeParts {
@@ -167,6 +169,7 @@ struct Picture: View {
                 let radius = min(rect.width, rect.height) * 0.085
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(look.card)
+                    .strokeBorder(look.cardStroke, lineWidth: 1)
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
                 if i < 2 {
