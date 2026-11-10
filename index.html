@@ -22,6 +22,9 @@
         --type: "Oswald", "Bebas Neue", "Helvetica Neue Condensed Bold", "Arial Narrow", Impact, sans-serif;
       }
       @media (orientation: portrait) { :root { --size: min(82vw, 43vh); } }
+      /* Three cards when seconds are on. */
+      body.with-seconds { --size: min(29vw, 74vh); }
+      @media (orientation: portrait) { body.with-seconds { --size: min(82vw, 28.5vh); } }
       * { box-sizing: border-box; }
       html, body { height: 100%; }
       body {
@@ -61,6 +64,22 @@
       @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.45); } }
       @keyframes unfold { from { filter: brightness(.6); } to { transform: rotateX(0); filter: none; } }
 
+      /* Seconds switch: tucked at the bottom, fades out when the mouse is idle. */
+      .controls { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); transition: opacity .4s; }
+      body.idle .controls:not(:focus-within) { opacity: 0; }
+      body.idle { cursor: none; }
+      .switch {
+        display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 0; border-radius: 999px;
+        background: none; color: #6a6a6a; font: 600 13px/1 var(--type); letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+      }
+      .switch:hover { color: var(--ink); }
+      .switch:focus-visible { outline: 1px solid #555; outline-offset: 2px; }
+      .track { position: relative; width: 38px; height: 22px; border-radius: 999px; background: #1e1e1e; transition: background .25s; }
+      .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #5a5a5a; transition: transform .25s, background .25s; }
+      .switch[aria-checked="true"] { color: var(--ink); }
+      .switch[aria-checked="true"] .track { background: #3a3a3a; }
+      .switch[aria-checked="true"] .knob { transform: translateX(16px); background: var(--ink); }
+
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; } }
     </style>
@@ -70,7 +89,11 @@
       <span class="sr-only" id="sr-time"></span>
       <span class="card" id="hours" aria-hidden="true"><span class="period" id="period"></span></span>
       <span class="card" id="minutes" aria-hidden="true"></span>
+      <span class="card" id="seconds" aria-hidden="true" hidden></span>
     </button>
+    <div class="controls">
+      <button class="switch" id="sec-switch" type="button" role="switch" aria-checked="false">Seconds<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
+    </div>
     <script>
       const pad = n => String(n).padStart(2, '0');
       const FLIP_MS = 600;
@@ -112,18 +135,48 @@
 
       const hourText = now => { const h = now.getHours(); return is24 ? pad(h) : String(h % 12 || 12); };
       const minuteText = now => pad(now.getMinutes());
+      const secondText = now => pad(now.getSeconds());
+
+      let showSeconds = false;
+      try { showSeconds = localStorage.getItem('clock-seconds') === 'on'; } catch (e) {}
 
       const start = new Date();
       const hours = makeCard(document.getElementById('hours'), hourText(start));
       const minutes = makeCard(document.getElementById('minutes'), minuteText(start));
+      const seconds = makeCard(document.getElementById('seconds'), secondText(start));
 
       function render(now) {
         flipTo(hours, hourText(now));
         flipTo(minutes, minuteText(now));
+        if (showSeconds) flipTo(seconds, secondText(now));
         const period = now.getHours() < 12 ? 'AM' : 'PM';
         document.getElementById('period').textContent = is24 ? '' : period;
         document.getElementById('sr-time').textContent = `${hourText(now)}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
       }
+
+      const secSwitch = document.getElementById('sec-switch');
+      function applySeconds() {
+        document.body.classList.toggle('with-seconds', showSeconds);
+        seconds.el.hidden = !showSeconds;
+        secSwitch.setAttribute('aria-checked', String(showSeconds));
+        if (showSeconds) { const v = secondText(new Date()); seconds.value = v; setAll(seconds, v); }
+      }
+      secSwitch.addEventListener('click', () => {
+        showSeconds = !showSeconds;
+        try { localStorage.setItem('clock-seconds', showSeconds ? 'on' : 'off'); } catch (e) {}
+        applySeconds();
+      });
+      applySeconds();
+
+      // Hide the switch and cursor after a few seconds without mouse or touch activity.
+      let idleTimer = 0;
+      function wake() {
+        document.body.classList.remove('idle');
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => document.body.classList.add('idle'), 3000);
+      }
+      ['mousemove', 'pointerdown', 'keydown', 'touchstart'].forEach(e => window.addEventListener(e, wake, { passive: true }));
+      wake();
 
       document.getElementById('clock').addEventListener('click', () => {
         is24 = !is24;
