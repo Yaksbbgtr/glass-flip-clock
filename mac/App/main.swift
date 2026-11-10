@@ -35,7 +35,7 @@ struct WidgetSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420)
+        .frame(width: 440, height: 360)
         .onChange(of: settings) { _, new in
             try? new.save()
             WidgetCenter.shared.reloadAllTimelines()
@@ -160,9 +160,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @objc func showWidgetSettings() {
         if settingsWindow == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: WidgetSettingsView()))
+            let size = NSSize(width: 440, height: 360)
+            let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "Widget Settings"
-            w.styleMask = [.titled, .closable]
+            let host = NSHostingView(rootView: WidgetSettingsView())
+            host.frame = NSRect(origin: .zero, size: size)
+            w.contentView = host
+            w.setContentSize(size)
             w.isReleasedWhenClosed = false
             w.level = window.level
             w.center()
