@@ -149,6 +149,9 @@ struct SecondsCard: View {
                 .font(Digits.font(size))
                 .lineLimit(1)
                 .multilineTextAlignment(.trailing)
+                // Keep the timer at its natural width (it would otherwise truncate to "…"),
+                // then show only the last two digits.
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(width: Digits.width(of: "00", size: size), alignment: .trailing)
                 .clipped()
         }
