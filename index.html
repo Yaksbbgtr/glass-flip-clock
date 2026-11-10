@@ -32,12 +32,8 @@
         background: var(--bg); font-family: var(--type); color: var(--ink);
         -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
       }
-      .clock {
-        display: flex; gap: calc(var(--size) * .08); align-items: center; justify-content: center;
-        border: 0; padding: 0; background: none; color: inherit; font: inherit; cursor: pointer;
-      }
+      .clock { display: flex; gap: calc(var(--size) * .08); align-items: center; justify-content: center; }
       @media (orientation: portrait) { .clock { flex-direction: column; gap: calc(var(--size) * .05); } }
-      .clock:focus-visible { outline: 1px solid #444; outline-offset: 12px; border-radius: var(--radius); }
 
       .card { position: relative; width: var(--size); height: var(--size); perspective: calc(var(--size) * 4); }
       .half, .flip { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: var(--card); }
@@ -64,17 +60,32 @@
       @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.45); } }
       @keyframes unfold { from { filter: brightness(.6); } to { transform: rotateX(0); filter: none; } }
 
-      /* Seconds switch: tucked at the bottom, fades out when the mouse is idle. */
-      .controls { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); transition: opacity .4s; }
-      body.idle .controls:not(:focus-within) { opacity: 0; }
+      /* Hamburger menu: top-right, fades out when the mouse is idle. */
+      .menu { position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); z-index: 10; transition: opacity .4s; }
+      body.idle .menu:not(.open):not(:focus-within) { opacity: 0; }
       body.idle { cursor: none; }
-      .switch {
-        display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 0; border-radius: 999px;
-        background: none; color: #6a6a6a; font: 600 13px/1 var(--type); letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+      .burger {
+        display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+        background: none; color: #6a6a6a; cursor: pointer; transition: color .2s, background .2s;
       }
-      .switch:hover { color: var(--ink); }
-      .switch:focus-visible { outline: 1px solid #555; outline-offset: 2px; }
-      .track { position: relative; width: 38px; height: 22px; border-radius: 999px; background: #1e1e1e; transition: background .25s; }
+      .burger:hover, .menu.open .burger { color: var(--ink); background: #141414; }
+      .burger:focus-visible { outline: 1px solid #555; outline-offset: 2px; }
+      .burger svg { width: 20px; height: 20px; }
+      .burger .close-icon, .menu.open .burger .open-icon { display: none; }
+      .menu.open .burger .close-icon { display: block; }
+      .panel {
+        position: absolute; top: 52px; right: 0; min-width: 190px; padding: 6px; border-radius: 14px;
+        background: #141414; box-shadow: 0 10px 40px rgba(0,0,0,.6); opacity: 0; transform: translateY(-6px); pointer-events: none;
+        transition: opacity .2s, transform .2s;
+      }
+      .menu.open .panel { opacity: 1; transform: none; pointer-events: auto; }
+      .switch {
+        display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; padding: 12px 14px; border: 0; border-radius: 10px;
+        background: none; color: #8a8a8a; font: 600 13px/1 var(--type); letter-spacing: .14em; text-transform: uppercase; cursor: pointer; text-align: left;
+      }
+      .switch:hover { color: var(--ink); background: #1c1c1c; }
+      .switch:focus-visible { outline: 1px solid #555; outline-offset: -1px; }
+      .track { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: #262626; transition: background .25s; }
       .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #5a5a5a; transition: transform .25s, background .25s; }
       .switch[aria-checked="true"] { color: var(--ink); }
       .switch[aria-checked="true"] .track { background: #3a3a3a; }
@@ -85,15 +96,22 @@
     </style>
   </head>
   <body>
-    <button class="clock" id="clock" type="button" aria-label="Current time. Press to switch between 12 and 24 hour time.">
+    <div class="clock" role="timer" aria-label="Current time">
       <span class="sr-only" id="sr-time"></span>
       <span class="card" id="hours" aria-hidden="true"><span class="period" id="period"></span></span>
       <span class="card" id="minutes" aria-hidden="true"></span>
       <span class="card" id="seconds" aria-hidden="true" hidden></span>
-    </button>
-    <div class="controls">
-      <button class="switch" id="sec-switch" type="button" role="switch" aria-checked="false">Seconds<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
     </div>
+    <nav class="menu" id="menu" aria-label="Settings">
+      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="panel" aria-label="Settings">
+        <svg class="open-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+        <svg class="close-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+      <div class="panel" id="panel">
+        <button class="switch" id="hour-switch" type="button" role="switch" aria-checked="false">24-hour<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
+        <button class="switch" id="sec-switch" type="button" role="switch" aria-checked="false">Seconds<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
+      </div>
+    </nav>
     <script>
       const pad = n => String(n).padStart(2, '0');
       const FLIP_MS = 600;
@@ -168,7 +186,7 @@
       });
       applySeconds();
 
-      // Hide the switch and cursor after a few seconds without mouse or touch activity.
+      // Hide the menu button and cursor after a few seconds without mouse or touch activity.
       let idleTimer = 0;
       function wake() {
         document.body.classList.remove('idle');
@@ -178,11 +196,24 @@
       ['mousemove', 'pointerdown', 'keydown', 'touchstart'].forEach(e => window.addEventListener(e, wake, { passive: true }));
       wake();
 
-      document.getElementById('clock').addEventListener('click', () => {
+      const hourSwitch = document.getElementById('hour-switch');
+      hourSwitch.setAttribute('aria-checked', String(is24));
+      hourSwitch.addEventListener('click', () => {
         is24 = !is24;
         try { localStorage.setItem('clock-format', is24 ? '24' : '12'); } catch (e) {}
+        hourSwitch.setAttribute('aria-checked', String(is24));
         render(new Date());
       });
+
+      const menu = document.getElementById('menu');
+      const burger = document.getElementById('burger');
+      function setMenu(open) {
+        menu.classList.toggle('open', open);
+        burger.setAttribute('aria-expanded', String(open));
+      }
+      burger.addEventListener('click', () => setMenu(!menu.classList.contains('open')));
+      document.addEventListener('pointerdown', e => { if (!menu.contains(e.target)) setMenu(false); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); burger.blur(); } });
 
       // Tick just after each second boundary so the minute flips on time.
       function tick() { render(new Date()); setTimeout(tick, 1000 - (Date.now() % 1000) + 10); }
