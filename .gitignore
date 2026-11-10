@@ -1,2 +1,5 @@
 mac/build/
+mac/FlipClock.xcodeproj/
+mac/App/Info.plist
+mac/Widget/Info.plist
 .DS_Store

@@ -7,14 +7,18 @@ A single-file flip clock with a frosted-glass look. Open `index.html` in any mod
 - Scales to fit phones, tablets and desktops
 - Respects the system "reduce motion" setting
 
-## Mac app
+## Mac app and desktop widget
 
-The `mac/` folder turns the clock into a native macOS app (a thin native window around the same `index.html`, bundled with the font so it works offline).
+The `mac/` folder builds a native macOS app that contains two things:
+
+- **Flip Clock.app** — a black, borderless window around the same `index.html`, with the full flip animation, bundled font (works offline), **Float on Top** (⌘T), **Reload** (⌘R), **Enter Full Screen** (⌃⌘F) and **Launch at Login**.
+- **A real desktop widget** — a SwiftUI widget for the macOS widget gallery, in small, medium and large sizes, with a **24-hour time** option (right-click the widget → *Edit "Flip Clock"*). Apple widgets can't run web content or animate every second, so this is a native re-creation of the two cards: it changes once a minute with a slide transition and has no seconds.
 
 ```sh
+brew install xcodegen   # once
 ./mac/build.sh
 ```
 
-That produces `mac/build/Flip Clock.app`. Drag it into **Applications** and open it like any other app. The **View** menu has **Float on Top** (⌘T), **Reload** (⌘R) and **Enter Full Screen** (⌃⌘F); the app menu has **Launch at Login**. The window remembers its size and position.
+That produces `mac/build/Flip Clock.app`. Drag it into **Applications** and open it once. Then right-click the desktop → **Edit Widgets…**, search for *Flip Clock*, and drag the widget onto the desktop or Notification Center.
 
-Needs Xcode or the Command Line Tools. The app is signed for your own Mac only (ad-hoc); to share it with other people you'd need an Apple Developer account for proper signing and notarization.
+Needs Xcode. The app is signed for your own Mac only (ad-hoc); to share it with other people you'd need an Apple Developer account for proper signing and notarization.

@@ -1,0 +1,71 @@
+name: FlipClock
+options:
+  bundleIdPrefix: com.yaksbbgtr
+  deploymentTarget:
+    macOS: "14.0"
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    ENABLE_HARDENED_RUNTIME: "NO"
+targets:
+  FlipClock:
+    type: application
+    platform: macOS
+    sources:
+      - App/main.swift
+      - path: App/AppIcon.icns
+        buildPhase: resources
+      - path: ../index.html
+        buildPhase: resources
+      - path: ../fonts
+        type: folder
+        buildPhase: resources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Flip Clock
+        CFBundleDisplayName: Flip Clock
+        CFBundleIconFile: AppIcon
+        CFBundleShortVersionString: "1.1"
+        CFBundleVersion: "2"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHighResolutionCapable: true
+        NSPrincipalClass: NSApplication
+        NSHumanReadableCopyright: Flip Clock
+    settings:
+      base:
+        PRODUCT_NAME: Flip Clock
+        PRODUCT_BUNDLE_IDENTIFIER: com.yaksbbgtr.flipclock
+    dependencies:
+      - target: FlipClockWidget
+  FlipClockWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Widget/FlipClockWidget.swift
+      - path: ../fonts/Oswald-Variable.ttf
+        buildPhase: resources
+    entitlements:
+      path: Widget/FlipClockWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleName: Flip Clock Widget
+        CFBundleDisplayName: Flip Clock
+        CFBundleShortVersionString: "1.1"
+        CFBundleVersion: "2"
+        NSHumanReadableCopyright: Flip Clock
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: FlipClockWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.yaksbbgtr.flipclock.widget

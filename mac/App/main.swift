@@ -7,7 +7,7 @@ final class ClockWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: ClockWindow!
     var webView: WKWebView!
     var floatItem: NSMenuItem!
@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         buildMenu()
         buildWindow()
         loadClock()
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reload), name: NSWorkspace.didWakeNotification, object: nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -42,10 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         window.appearance = NSAppearance(named: .darkAqua)
         window.center()
 
-        let config = WKWebViewConfiguration()
-        webView = WKWebView(frame: frame, configuration: config)
+        webView = WKWebView(frame: frame, configuration: WKWebViewConfiguration())
         webView.autoresizingMask = [.width, .height]
-        webView.navigationDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = .black
         webView.allowsBackForwardNavigationGestures = false
@@ -56,16 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     func loadClock() {
-        guard let dir = Bundle.main.resourceURL?.appendingPathComponent("web") else { return }
-        let index = dir.appendingPathComponent("index.html")
-        webView.loadFileURL(index, allowingReadAccessTo: dir)
+        guard let dir = Bundle.main.resourceURL else { return }
+        webView.loadFileURL(dir.appendingPathComponent("index.html"), allowingReadAccessTo: dir)
     }
-
-    // Keep the clock honest after sleep: reload so the tick timer re-syncs.
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(wokeUp), name: NSWorkspace.didWakeNotification, object: nil)
-    }
-    @objc func wokeUp() { webView.reload() }
 
     // MARK: Menu
 
