@@ -56,7 +56,7 @@ final class ClockWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler {
     var window: ClockWindow!
     var webView: WKWebView!
     var floatItem: NSMenuItem!
@@ -70,6 +70,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         loadClock()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reload), name: NSWorkspace.didWakeNotification, object: nil)
         NSApp.activate(ignoringOtherApps: true)
+        if CommandLine.arguments.contains("--widget-settings") { showWidgetSettings() }
+    }
+
+    // The clock page's ☰ menu has a "Widget settings…" item that sends this message.
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.body as? String == "widget-settings" { showWidgetSettings() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -93,7 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.appearance = NSAppearance(named: .darkAqua)
         window.center()
 
-        webView = DraggableWebView(frame: frame, configuration: WKWebViewConfiguration())
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(self, name: "flipclock")
+        webView = DraggableWebView(frame: frame, configuration: config)
         webView.autoresizingMask = [.width, .height]
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = .black

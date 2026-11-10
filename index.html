@@ -108,6 +108,7 @@
       <div class="panel" id="panel">
         <button class="switch" id="hour-switch" type="button" role="switch" aria-checked="false">24-hour<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
         <button class="switch" id="sec-switch" type="button" role="switch" aria-checked="false">Seconds<span class="track" aria-hidden="true"><span class="knob"></span></span></button>
+        <button class="switch" id="widget-settings" type="button" hidden>Widget settings…</button>
       </div>
     </nav>
     <script>
@@ -183,6 +184,14 @@
         applySeconds();
       });
       applySeconds();
+
+      // Inside the Mac app, the menu also opens the native Widget Settings window.
+      const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.flipclock;
+      const widgetBtn = document.getElementById('widget-settings');
+      if (native) {
+        widgetBtn.hidden = false;
+        widgetBtn.addEventListener('click', () => { native.postMessage('widget-settings'); setMenu(false); });
+      }
 
       // Hide the menu button and cursor after a few seconds without mouse or touch activity.
       let idleTimer = 0;
