@@ -1,6 +1,48 @@
 import AppKit
 import WebKit
+import SwiftUI
 import ServiceManagement
+import WidgetKit
+
+// MARK: - Widget settings window
+
+struct WidgetSettingsView: View {
+    @State private var settings = WidgetSettings.load()
+
+    var body: some View {
+        Form {
+            Section("Look") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Slider(value: $settings.solidity, in: 0...1) {
+                        Text("Look")
+                    } minimumValueLabel: {
+                        Text("Clear")
+                    } maximumValueLabel: {
+                        Text("Solid")
+                    }
+                    .labelsHidden()
+                    Text("Clear is see-through glass with white digits. Solid is black with grey digits, like the app.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            Section("Time") {
+                Toggle("24-hour time", isOn: $settings.twentyFourHour)
+                Toggle("Seconds", isOn: $settings.showSeconds)
+            }
+            Section {
+                Text("To put the widget on your desktop: right-click the desktop → Edit Widgets… → Flip Clock.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 420)
+        .onChange(of: settings) { _, new in
+            try? new.save()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+}
+
 
 /// A web view normally swallows every mouse-down, so dragging the black background
 /// did nothing. Letting AppKit treat those drags as window moves fixes that; plain
@@ -19,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var webView: WKWebView!
     var floatItem: NSMenuItem!
     var loginItem: NSMenuItem!
+    var settingsWindow: NSWindow?
     let defaults = UserDefaults.standard
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -74,6 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Flip Clock", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Widget Settings…", action: #selector(showWidgetSettings), keyEquivalent: ",")
+        appMenu.addItem(.separator())
         loginItem = appMenu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         appMenu.addItem(.separator())
@@ -104,6 +149,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func reload() { webView.reload() }
+
+    @objc func showWidgetSettings() {
+        if settingsWindow == nil {
+            let w = NSWindow(contentViewController: NSHostingController(rootView: WidgetSettingsView()))
+            w.title = "Widget Settings"
+            w.styleMask = [.titled, .closable]
+            w.isReleasedWhenClosed = false
+            w.level = window.level
+            w.center()
+            settingsWindow = w
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
 
     @objc func toggleFloat() {
         let on = window.level != .floating

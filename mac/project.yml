@@ -2,7 +2,7 @@ name: FlipClock
 options:
   bundleIdPrefix: com.yaksbbgtr
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "15.0"
   generateEmptyDirectories: true
 settings:
   base:
@@ -19,6 +19,7 @@ targets:
     platform: macOS
     sources:
       - App/main.swift
+      - Shared/WidgetSettings.swift
       - path: App/AppIcon.icns
         buildPhase: resources
       - path: ../index.html
@@ -32,8 +33,8 @@ targets:
         CFBundleName: Flip Clock
         CFBundleDisplayName: Flip Clock
         CFBundleIconFile: AppIcon
-        CFBundleShortVersionString: "1.6"
-        CFBundleVersion: "7"
+        CFBundleShortVersionString: "1.7"
+        CFBundleVersion: "8"
         LSApplicationCategoryType: public.app-category.utilities
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication
@@ -49,19 +50,23 @@ targets:
     platform: macOS
     sources:
       - Widget/FlipClockWidget.swift
+      - Shared/WidgetSettings.swift
       - path: ../fonts/FlipDigits-SemiBold.ttf
         buildPhase: resources
     entitlements:
       path: Widget/FlipClockWidget.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        # Lets the sandboxed widget read the settings file the app writes.
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /Library/Application Support/FlipClock/
     info:
       path: Widget/Info.plist
       properties:
         CFBundleName: Flip Clock Widget
         CFBundleDisplayName: Flip Clock
-        CFBundleShortVersionString: "1.6"
-        CFBundleVersion: "7"
+        CFBundleShortVersionString: "1.7"
+        CFBundleVersion: "8"
         NSHumanReadableCopyright: Flip Clock
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

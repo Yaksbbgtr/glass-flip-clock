@@ -1,6 +1,5 @@
 import WidgetKit
 import SwiftUI
-import AppIntents
 import CoreText
 
 // MARK: - Font
@@ -26,177 +25,205 @@ enum Digits {
     }
 }
 
-// MARK: - Configuration (right-click the widget → Edit Widget)
-
-struct ClockConfig: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Flip Clock"
-    static var description = IntentDescription("Choose how the time is shown.")
-
-    @Parameter(title: "24-hour time", default: false)
-    var twentyFourHour: Bool
-
-    @Parameter(title: "Seconds", default: false)
-    var showSeconds: Bool
-}
-
 // MARK: - Timeline
 
 struct ClockEntry: TimelineEntry {
     let date: Date
-    let config: ClockConfig
+    let settings: WidgetSettings
 }
 
-struct ClockProvider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> ClockEntry { ClockEntry(date: .now, config: ClockConfig()) }
-    func snapshot(for config: ClockConfig, in context: Context) async -> ClockEntry { ClockEntry(date: .now, config: config) }
+struct ClockProvider: TimelineProvider {
+    func placeholder(in context: Context) -> ClockEntry { ClockEntry(date: .now, settings: WidgetSettings()) }
+    func getSnapshot(in context: Context, completion: @escaping (ClockEntry) -> Void) {
+        completion(ClockEntry(date: .now, settings: WidgetSettings.load()))
+    }
 
     // One entry per minute for the next two hours; WidgetKit shows each at the right moment
-    // and asks for a fresh timeline when they run out.
-    func timeline(for config: ClockConfig, in context: Context) async -> Timeline<ClockEntry> {
+    // and asks for a fresh timeline when they run out (or when the app changes the settings).
+    func getTimeline(in context: Context, completion: @escaping (Timeline<ClockEntry>) -> Void) {
+        let settings = WidgetSettings.load()
         let cal = Calendar.current
         let start = cal.dateInterval(of: .minute, for: .now)?.start ?? .now
         let entries = (0..<120).compactMap { i -> ClockEntry? in
             guard let d = cal.date(byAdding: .minute, value: i, to: start) else { return nil }
-            return ClockEntry(date: d, config: config)
+            return ClockEntry(date: d, settings: settings)
         }
-        return Timeline(entries: entries, policy: .atEnd)
+        completion(Timeline(entries: entries, policy: .atEnd))
+    }
+}
+
+// MARK: - Layout
+
+/// Where each card and colon goes for a given widget size. Cards fill the widget;
+/// in the square small widget they stack, everywhere else they sit in a row with colons between.
+struct Layout {
+    var cards: [CGRect] = []
+    var colons: [CGPoint] = []
+    var digit: CGFloat = 0
+
+    init(size: CGSize, count: Int, stacked: Bool) {
+        let n = CGFloat(count)
+        if stacked {
+            let gap = max(6, size.width * 0.05)
+            let ch = (size.height - gap * (n - 1)) / n
+            cards = (0..<count).map { CGRect(x: 0, y: CGFloat($0) * (ch + gap), width: size.width, height: ch) }
+            digit = min(ch * 0.86, size.width * 0.88)
+        } else {
+            // The gap holds a colon, so it scales with the card height.
+            let gap = max(10, min(size.height * 0.22, size.width * 0.08))
+            let cw = (size.width - gap * (n - 1)) / n
+            cards = (0..<count).map { CGRect(x: CGFloat($0) * (cw + gap), y: 0, width: cw, height: size.height) }
+            colons = (1..<count).map { CGPoint(x: CGFloat($0) * (cw + gap) - gap / 2, y: size.height / 2) }
+            digit = min(size.height * 0.86, cw * 0.88)
+        }
+    }
+}
+
+// MARK: - Colours
+
+/// The look for a given solidity (0 = clear glass, 1 = solid black like the app).
+struct Look {
+    let solidity: Double
+    var t: Double { min(max(solidity, 0), 1) }
+    /// Card fill: translucent white glass at 0, the app's near-black at 1.
+    var card: Color { Color(white: 1 - 0.93 * t).opacity(0.22 + 0.78 * t) }
+    /// Digits: pure white on glass, the app's light grey on black.
+    var ink: Color { Color(white: 1 - 0.275 * t) }
+    /// The widget's own background: invisible at 0, black at 1.
+    var background: Color { Color.black.opacity(t) }
+    /// The gap line across each card.
+    var seam: Color { Color.black.opacity(0.35 + 0.65 * t) }
+}
+
+struct TimeParts {
+    let hour: String, minute: String, period: String?
+    init(_ date: Date, twentyFourHour: Bool) {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: date)
+        hour = twentyFourHour ? String(format: "%02d", h) : String(h % 12 == 0 ? 12 : h % 12)
+        minute = String(format: "%02d", cal.component(.minute, from: date))
+        period = twentyFourHour ? nil : (h < 12 ? "AM" : "PM")
     }
 }
 
 // MARK: - Views
 
-let inkColor = Color(white: 0.725)
-
-/// macOS draws desktop widgets in "accented" (monochrome) mode whenever another app is in front.
-/// In that mode only the *shape* (alpha) of the content is used, so solid grey digits on a solid
-/// card both become the same frosted fill and the time disappears. Here the card is made
-/// translucent and the digits opaque, so the digits stay visible as bright shapes.
-struct Palette {
-    let accented: Bool
-    var card: Color { accented ? Color.white.opacity(0.22) : Color(white: 0.07) }
-    var ink: Color { accented ? .white : inkColor }
-}
-
-struct Card<Content: View>: View {
-    let width: CGFloat
-    let height: CGFloat
-    var period: String? = nil
-    @ViewBuilder let content: () -> Content
-    @Environment(\.widgetRenderingMode) private var renderingMode
-
-    private var radius: CGFloat { min(width, height) * 0.085 }
+/// Everything except the live seconds, drawn as one flat picture. It is shown as an Image that
+/// opts out of the Mac's monochrome widget mode, so the chosen colours and transparency survive
+/// even when another app is in front.
+struct Picture: View {
+    let time: TimeParts
+    let layout: Layout
+    let look: Look
+    let size: CGSize
 
     var body: some View {
-        let palette = Palette(accented: renderingMode == .accented)
-        ZStack {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(palette.card)
-            content()
-                .foregroundStyle(palette.ink)
-                .widgetAccentable()
-            if let period {
-                Text(period)
-                    .font(Digits.font(min(width, height) * 0.085))
-                    .foregroundStyle(palette.ink)
-                    .widgetAccentable()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.leading, width * 0.06)
-                    .padding(.top, height * 0.07)
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(layout.cards.enumerated()), id: \.offset) { i, rect in
+                let radius = min(rect.width, rect.height) * 0.085
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(look.card)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                if i < 2 {
+                    Text(i == 0 ? time.hour : time.minute)
+                        .font(Digits.font(layout.digit))
+                        .foregroundStyle(look.ink)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+                Rectangle().fill(look.seam)
+                    .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                    .position(x: rect.midX, y: rect.midY)
             }
-            // The seam is cut out of the card (and digits) rather than painted on,
-            // so it reads as a gap in both colour and monochrome modes.
-            Rectangle()
-                .frame(height: max(1.5, height * 0.007))
-                .blendMode(.destinationOut)
+            if let p = time.period, let rect = layout.cards.first {
+                let s = min(rect.width, rect.height)
+                Text(p)
+                    .font(Digits.font(s * 0.085))
+                    .foregroundStyle(look.ink)
+                    .position(x: rect.minX + rect.width * 0.06 + s * 0.09, y: rect.minY + rect.height * 0.07 + s * 0.045)
+            }
+            ForEach(Array(layout.colons.enumerated()), id: \.offset) { _, pt in
+                Text(":").font(Digits.font(layout.digit * 0.6)).foregroundStyle(look.ink).position(pt)
+            }
         }
-        .compositingGroup()
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .frame(width: size.width, height: size.height)
     }
 }
 
-/// Digit size for a card: limited by height, or by width when the card is narrow (two digits ≈ 0.95em).
-func digitSize(width: CGFloat, height: CGFloat) -> CGFloat { min(height * 0.86, width * 0.88) }
+@MainActor
+enum PictureCache {
+    static var key = ""
+    static var image: CGImage?
 
-struct DigitCard: View {
-    let text: String
-    let width: CGFloat
-    let height: CGFloat
-    var period: String? = nil
-
-    var body: some View {
-        Card(width: width, height: height, period: period) {
-            Text(text)
-                .font(Digits.font(digitSize(width: width, height: height)))
-                .lineLimit(1)
-                .id(text)
-                .transition(.push(from: .top))
-        }
+    static func render(_ view: Picture, scale: CGFloat, key newKey: String) -> CGImage? {
+        if newKey == key, let image { return image }
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        renderer.isOpaque = false
+        image = renderer.cgImage
+        key = newKey
+        return image
     }
 }
 
 /// Widgets can't redraw every second, but a timer Text ticks live. It counts "0:00, 0:01, …"
-/// from the start of the minute; clipping it to exactly two digits leaves just the seconds.
-struct SecondsCard: View {
+/// from the start of the minute; showing only its last two digits leaves just the seconds.
+struct SecondsCounter: View {
     let minuteStart: Date
-    let width: CGFloat
-    let height: CGFloat
+    let rect: CGRect
+    let digit: CGFloat
+    let color: Color
 
     var body: some View {
-        let size = digitSize(width: width, height: height)
-        Card(width: width, height: height) {
-            Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
-                .font(Digits.font(size))
-                .lineLimit(1)
-                .multilineTextAlignment(.trailing)
-                // Keep the timer at its natural width (it would otherwise truncate to "…"),
-                // then show only the last two digits.
-                .fixedSize(horizontal: true, vertical: false)
-                .frame(width: Digits.width(of: "00", size: size), alignment: .trailing)
-                .clipped()
-        }
+        Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
+            .font(Digits.font(digit))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(width: Digits.width(of: "00", size: digit), alignment: .trailing)
+            .clipped()
+            .position(x: rect.midX, y: rect.midY)
     }
 }
 
 struct ClockView: View {
     let entry: ClockEntry
     @Environment(\.widgetFamily) private var family
-
-    private var hour: String {
-        let h = Calendar.current.component(.hour, from: entry.date)
-        return entry.config.twentyFourHour ? String(format: "%02d", h) : String(h % 12 == 0 ? 12 : h % 12)
-    }
-    private var minute: String { String(format: "%02d", Calendar.current.component(.minute, from: entry.date)) }
-    private var period: String? {
-        entry.config.twentyFourHour ? nil : (Calendar.current.component(.hour, from: entry.date) < 12 ? "AM" : "PM")
-    }
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let count: CGFloat = entry.config.showSeconds ? 3 : 2
-            // The small widget is square, so stack the cards; every other size puts them side by side.
-            // The cards fill the whole widget, whatever its shape.
-            let stacked = family == .systemSmall
-            let gap = max(6, min(w, h) * 0.05)
-            if stacked {
-                let ch = (h - gap * (count - 1)) / count
-                VStack(spacing: gap) {
-                    DigitCard(text: hour, width: w, height: ch, period: period)
-                    DigitCard(text: minute, width: w, height: ch)
-                    if entry.config.showSeconds { SecondsCard(minuteStart: entry.date, width: w, height: ch) }
+            let settings = entry.settings
+            let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour)
+            let count = settings.showSeconds ? 3 : 2
+            let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
+            let look = Look(solidity: settings.solidity)
+            let picture = Picture(time: time, layout: layout, look: look, size: geo.size)
+            let key = "\(time.hour)|\(time.minute)|\(time.period ?? "")|\(count)|\(Int(geo.size.width))x\(Int(geo.size.height))|\(displayScale)|\(look.t)"
+            ZStack(alignment: .topLeading) {
+                if let cg = PictureCache.render(picture, scale: displayScale, key: key) {
+                    Image(decorative: cg, scale: displayScale)
+                        .resizable()
+                        .widgetAccentedRenderingMode(.fullColor)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                } else {
+                    picture
                 }
-            } else {
-                let cw = (w - gap * (count - 1)) / count
-                HStack(spacing: gap) {
-                    DigitCard(text: hour, width: cw, height: h, period: period)
-                    DigitCard(text: minute, width: cw, height: h)
-                    if entry.config.showSeconds { SecondsCard(minuteStart: entry.date, width: cw, height: h) }
+                if settings.showSeconds, let rect = layout.cards.last {
+                    // Live text can't be part of the picture. In monochrome mode the system tints it white.
+                    SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit,
+                                   color: renderingMode == .accented ? .white : look.ink)
+                        .widgetAccentable()
+                    if renderingMode != .accented {
+                        Rectangle().fill(look.seam)
+                            .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                            .position(x: rect.midX, y: rect.midY)
+                    }
                 }
             }
         }
         .padding(8)
-        .animation(.easeInOut(duration: 0.5), value: entry.date)
     }
 }
 
@@ -204,12 +231,12 @@ struct ClockView: View {
 
 struct FlipClockWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "FlipClock", intent: ClockConfig.self, provider: ClockProvider()) { entry in
+        StaticConfiguration(kind: "FlipClock", provider: ClockProvider()) { entry in
             ClockView(entry: entry)
-                .containerBackground(.black, for: .widget)
+                .containerBackground(for: .widget) { Look(solidity: entry.settings.solidity).background }
         }
         .configurationDisplayName("Flip Clock")
-        .description("A big black-and-white flip clock. Options: 24-hour time, seconds.")
+        .description("A big flip clock. Change its look in Flip Clock → Widget Settings.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
         .contentMarginsDisabled()
     }

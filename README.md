@@ -12,7 +12,7 @@ A single-file flip clock with a frosted-glass look. Open `index.html` in any mod
 The `mac/` folder builds a native macOS app that contains two things:
 
 - **Flip Clock.app** — a black, borderless window around the same `index.html`, with the full flip animation, bundled font (works offline), **Float on Top** (⌘T), **Reload** (⌘R), **Enter Full Screen** (⌃⌘F) and **Launch at Login**.
-- **A real desktop widget** — a SwiftUI widget for the macOS widget gallery, in small, medium and large sizes, with **24-hour time** and **Seconds** options (right-click the widget → *Edit "Flip Clock"*). Apple widgets can't run web content, so this is a native re-creation of the cards: hours and minutes change with a slide transition, and the seconds card is a live counter (no flip). `fonts/FlipDigits-SemiBold.ttf` is Oswald SemiBold with equal-width digits, which the seconds counter needs.
+- **A real desktop widget** — a SwiftUI widget for the macOS widget gallery, in small, medium, large and extra-large sizes. Its look is set in the app: **Flip Clock → Widget Settings…** (⌘,) has a **Clear ↔ Solid** slider, **24-hour time** and **Seconds**. Apple widgets can't run web content, so this is a native re-creation of the cards with colons between them; the seconds card is a live counter (no flip). The settings are stored in `~/Library/Application Support/FlipClock/widget-settings.json`, which the sandboxed widget is allowed to read. `fonts/FlipDigits-SemiBold.ttf` is Oswald SemiBold with equal-width digits, which the seconds counter needs.
 
 ```sh
 brew install xcodegen   # once
