@@ -152,9 +152,9 @@ struct TimeParts {
 
 // MARK: - Views
 
-/// Everything except the live seconds, drawn as one flat picture. It is shown as an Image that
-/// opts out of the Mac's monochrome widget mode, so the chosen colours and transparency survive
-/// even when another app is in front.
+/// Everything except the live seconds, drawn with plain SwiftUI shapes and text.
+/// (It used to be flattened into one bitmap, but macOS showed that bitmap as a blank grey slab.)
+/// In the Mac's monochrome mode the digits and colons are the accented part, so they stay bright.
 struct Picture: View {
     let time: TimeParts
     let layout: Layout
@@ -174,6 +174,7 @@ struct Picture: View {
                     Text(i == 0 ? time.hour : time.minute)
                         .font(Digits.font(layout.digit))
                         .foregroundStyle(look.ink)
+                        .widgetAccentable()
                         .position(x: rect.midX, y: rect.midY)
                 }
                 if seams {
@@ -187,29 +188,14 @@ struct Picture: View {
                 Text(p)
                     .font(Digits.font(s * 0.085))
                     .foregroundStyle(look.ink)
+                    .widgetAccentable()
                     .position(x: rect.minX + rect.width * 0.06 + s * 0.09, y: rect.minY + rect.height * 0.07 + s * 0.045)
             }
             ForEach(Array(layout.colons.enumerated()), id: \.offset) { _, pt in
-                Text(":").font(Digits.font(layout.digit * 0.6)).foregroundStyle(look.ink).position(pt)
+                Text(":").font(Digits.font(layout.digit * 0.6)).foregroundStyle(look.ink).widgetAccentable().position(pt)
             }
         }
         .frame(width: size.width, height: size.height)
-    }
-}
-
-@MainActor
-enum PictureCache {
-    static var key = ""
-    static var image: CGImage?
-
-    static func render(_ view: Picture, scale: CGFloat, key newKey: String) -> CGImage? {
-        if newKey == key, let image { return image }
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = scale
-        renderer.isOpaque = false
-        image = renderer.cgImage
-        key = newKey
-        return image
     }
 }
 
@@ -237,7 +223,6 @@ struct ClockView: View {
     let entry: ClockEntry
     @Environment(\.widgetFamily) private var family
     @Environment(\.widgetRenderingMode) private var renderingMode
-    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         GeometryReader { geo in
@@ -250,17 +235,8 @@ struct ClockView: View {
             let count = showSeconds ? 3 : 2
             let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
             let look = Look(solidity: settings.solidity)
-            let picture = Picture(time: time, layout: layout, look: look, size: geo.size, seams: !accented)
-            let key = "\(time.hour)|\(time.minute)|\(time.period ?? "")|\(count)|\(Int(geo.size.width))x\(Int(geo.size.height))|\(displayScale)|\(look.t)|\(accented)"
             ZStack(alignment: .topLeading) {
-                if let cg = PictureCache.render(picture, scale: displayScale, key: key) {
-                    Image(decorative: cg, scale: displayScale)
-                        .resizable()
-                        .widgetAccentedRenderingMode(.fullColor)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                } else {
-                    picture
-                }
+                Picture(time: time, layout: layout, look: look, size: geo.size, seams: !accented)
                 if showSeconds, let rect = layout.cards.last {
                     // Live text can't be part of the picture.
                     SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit, color: look.ink)
