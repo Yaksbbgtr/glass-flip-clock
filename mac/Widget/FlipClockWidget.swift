@@ -171,11 +171,22 @@ struct Picture: View {
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
                 if i < 2 {
-                    Text(i == 0 ? time.hour : time.minute)
-                        .font(Digits.font(layout.digit))
-                        .foregroundStyle(look.ink)
-                        .widgetAccentable()
-                        .position(x: rect.midX, y: rect.midY)
+                    // Each digit that changes drops in from the top as the old one drops out.
+                    // (Widgets only animate built-in transitions; a true 3D flap fold is ignored.)
+                    let value = Array(i == 0 ? time.hour : time.minute).map(String.init)
+                    HStack(spacing: 0) {
+                        ForEach(Array(value.enumerated()), id: \.offset) { _, ch in
+                            Text(ch)
+                                .font(Digits.font(layout.digit))
+                                .foregroundStyle(look.ink)
+                                .widgetAccentable()
+                                .id(ch)
+                                .transition(.push(from: .top))
+                        }
+                    }
+                    .frame(width: rect.width, height: rect.height)
+                    .clipped()
+                    .position(x: rect.midX, y: rect.midY)
                 }
                 if seams {
                     Rectangle().fill(look.seam)
