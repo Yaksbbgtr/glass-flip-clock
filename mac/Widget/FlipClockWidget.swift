@@ -212,6 +212,9 @@ struct SecondsCounter: View {
             .font(Digits.font(digit))
             .foregroundStyle(color)
             .lineLimit(1)
+            // A widget timer reserves room for its longest value; right-align the digits inside that
+            // room, or the clip below keeps only empty space.
+            .multilineTextAlignment(.trailing)
             .fixedSize(horizontal: true, vertical: false)
             .frame(width: Digits.width(of: "00", size: digit), alignment: .trailing)
             .clipped()
