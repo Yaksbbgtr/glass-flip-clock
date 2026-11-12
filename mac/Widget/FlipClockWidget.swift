@@ -200,7 +200,10 @@ struct Picture: View {
 }
 
 /// Widgets can't redraw every second, but a timer Text ticks live. It counts "0:00, 0:01, …"
-/// from the start of the minute; showing only its last two digits leaves just the seconds.
+/// from the start of the minute; the view shows only the last two digits.
+/// macOS draws nothing at all for a timer given .fixedSize(), so the timer gets a fixed frame
+/// wide enough for "0:00" (text sits at its left edge), is shifted left past the "0:",
+/// and is clipped to two digits.
 struct SecondsCounter: View {
     let minuteStart: Date
     let rect: CGRect
@@ -208,15 +211,16 @@ struct SecondsCounter: View {
     let color: Color
 
     var body: some View {
+        let prefix = Digits.width(of: "0:", size: digit)
+        let full = Digits.width(of: "0:00", size: digit)
+        let seconds = Digits.width(of: "00", size: digit)
         Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
             .font(Digits.font(digit))
             .foregroundStyle(color)
             .lineLimit(1)
-            // A widget timer reserves room for its longest value; right-align the digits inside that
-            // room, or the clip below keeps only empty space.
-            .multilineTextAlignment(.trailing)
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(width: Digits.width(of: "00", size: digit), alignment: .trailing)
+            .frame(width: full * 1.15, alignment: .leading)
+            .offset(x: -prefix)
+            .frame(width: seconds, alignment: .leading)
             .clipped()
             .position(x: rect.midX, y: rect.midY)
     }
