@@ -227,10 +227,10 @@ struct ClockView: View {
     var body: some View {
         GeometryReader { geo in
             let settings = entry.settings
-            // While another app is in front, macOS shows widgets as a dimmed two-tone snapshot:
-            // live text can't tick there, so the seconds card is left out until the desktop is active again.
+            // Monochrome (accented) mode: either Widget style is set to Monochrome, or another app is in front.
+            // The seconds still show there; they may pause while macOS dims the desktop.
             let accented = renderingMode == .accented
-            let showSeconds = settings.showSeconds && !accented
+            let showSeconds = settings.showSeconds
             let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour)
             let count = showSeconds ? 3 : 2
             let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
@@ -240,9 +240,12 @@ struct ClockView: View {
                 if showSeconds, let rect = layout.cards.last {
                     // Live text can't be part of the picture.
                     SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit, color: look.ink)
-                    Rectangle().fill(look.seam)
-                        .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
-                        .position(x: rect.midX, y: rect.midY)
+                        .widgetAccentable()
+                    if !accented {
+                        Rectangle().fill(look.seam)
+                            .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                            .position(x: rect.midX, y: rect.midY)
+                    }
                 }
             }
         }
