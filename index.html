@@ -70,6 +70,23 @@
       .slot.rolling .strip { animation: roll var(--flip-ms) cubic-bezier(.55,0,.25,1) both; }
       @keyframes roll { to { transform: translateY(-50%); } }
 
+      /* Book: the same four pieces as Flip, turned on their side. The card splits at a vertical spine;
+         the right page carries the old value over to the left (revealing the new right half), then the
+         left page lands with the new value over the old left half. */
+      body.anim-book .half, body.anim-book .flip { top: 0; bottom: auto; width: 50%; height: 100%; }
+      body.anim-book .top, body.anim-book .flip-top { left: 50%; border-radius: 0 var(--radius) var(--radius) 0; }
+      body.anim-book .bottom, body.anim-book .flip-bottom { left: 0; border-radius: var(--radius) 0 0 var(--radius); }
+      body.anim-book .half .number, body.anim-book .flip .number { top: 0; bottom: auto; width: var(--size); height: var(--size); }
+      body.anim-book .top .number, body.anim-book .flip-top .number { left: auto; right: 0; }
+      body.anim-book .bottom .number, body.anim-book .flip-bottom .number { left: 0; right: auto; }
+      body.anim-book .flip-top { transform-origin: left; transform: none; }
+      body.anim-book .flip-bottom { transform-origin: right; transform: rotateY(90deg); }
+      body.anim-book .card.flipping .flip-top { animation-name: turn; }
+      body.anim-book .card.flipping .flip-bottom { animation-name: unturn; }
+      @keyframes turn { to { transform: rotateY(-90deg); filter: brightness(.45); } }
+      @keyframes unturn { from { filter: brightness(.6); } to { transform: rotateY(0); filter: none; } }
+      body.anim-book .seam { top: 0; bottom: 0; left: calc(50% - var(--seam) / 2); right: auto; width: var(--seam); height: auto; }
+
       /* Animation picker in the menu. */
       .choice { padding: 10px 14px 12px; }
       .choice-label { display: block; margin-bottom: 9px; color: #8a8a8a; font: 600 13px/1 var(--type); letter-spacing: .14em; text-transform: uppercase; }
@@ -138,6 +155,7 @@
           <div class="segments" id="anim-choice">
             <button type="button" role="radio" data-anim="flip" aria-checked="true">Flip</button>
             <button type="button" role="radio" data-anim="roll" aria-checked="false">Roll</button>
+            <button type="button" role="radio" data-anim="book" aria-checked="false">Book</button>
           </div>
         </div>
         <button class="switch" id="widget-settings" type="button" hidden>Widget settings…</button>
@@ -177,10 +195,11 @@
       }
 
       let animation = 'flip';
-      try { if (localStorage.getItem('clock-animation') === 'roll') animation = 'roll'; } catch (e) {}
+      try { const a = localStorage.getItem('clock-animation'); if (a === 'roll' || a === 'book') animation = a; } catch (e) {}
 
       // The upper flap carries the old value down and reveals the new one behind it,
       // then the lower flap lands with the new value over the old lower half.
+      // (Book mode restyles the same pieces as right and left pages.)
       function flipTo(card, v) {
         if (card.value === v) return;
         const old = card.value;
@@ -241,10 +260,12 @@
       });
       applySeconds();
 
-      // Animation picker: Flip (split-flap cards) or Roll (digits roll up into the new number).
+      // Animation picker: Flip (split-flap cards), Roll (digits roll up into the new number)
+      // or Book (the card turns like a page around a vertical spine).
       const animChoice = document.getElementById('anim-choice');
       function applyAnimation() {
         document.body.classList.toggle('anim-roll', animation === 'roll');
+        document.body.classList.toggle('anim-book', animation === 'book');
         animChoice.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.anim === animation)));
       }
       animChoice.addEventListener('click', e => {
