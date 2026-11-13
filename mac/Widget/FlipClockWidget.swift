@@ -104,10 +104,14 @@ struct ClockProvider: AppIntentTimelineProvider {
         let settings = config.resolved(over: WidgetSettings.load())
         let cal = Calendar.current
         let perSecond = settings.showSeconds
+        // Book flips need macOS to show every entry (each one flips the card the other way), and
+        // macOS only redraws about every 2 seconds, so Book's seconds step by two.
+        let step = perSecond && settings.animationStyle == .book ? 2 : 1
         let unit: Calendar.Component = perSecond ? .second : .minute
-        let start = cal.dateInterval(of: unit, for: .now)?.start ?? .now
-        let entries = (0..<(perSecond ? 300 : 120)).compactMap { i -> ClockEntry? in
-            guard let d = cal.date(byAdding: unit, value: i, to: start) else { return nil }
+        var start = cal.dateInterval(of: unit, for: .now)?.start ?? .now
+        if step == 2 { start = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 2).rounded(.down) * 2) }
+        let entries = (0..<(perSecond ? 300 / step : 120)).compactMap { i -> ClockEntry? in
+            guard let d = cal.date(byAdding: unit, value: i * step, to: start) else { return nil }
             return ClockEntry(date: d, settings: settings)
         }
         return Timeline(entries: entries, policy: .atEnd)
@@ -159,6 +163,9 @@ struct Look {
 
 struct TimeParts {
     let hour: String, minute: String, second: String, period: String?
+    init(hour: String, minute: String, second: String, period: String?) {
+        self.hour = hour; self.minute = minute; self.second = second; self.period = period
+    }
     /// `padHour` gives one-digit 12-hour times a leading zero (08), as Book mode does in the app.
     init(_ date: Date, twentyFourHour: Bool, padHour: Bool = false) {
         let cal = Calendar.current
@@ -168,6 +175,16 @@ struct TimeParts {
         minute = String(format: "%02d", cal.component(.minute, from: date))
         second = String(format: "%02d", cal.component(.second, from: date))
         period = twentyFourHour ? nil : (h < 12 ? "AM" : "PM")
+    }
+}
+
+extension TimeParts {
+    /// Each card's value `steps` steps away from `date` (an hour, a minute, or `secondStep` seconds per step).
+    static func stepped(_ date: Date, by steps: Double, secondStep: Double, twentyFourHour: Bool, padHour: Bool) -> TimeParts {
+        let h = TimeParts(date.addingTimeInterval(3600 * steps), twentyFourHour: twentyFourHour, padHour: padHour)
+        let m = TimeParts(date.addingTimeInterval(60 * steps), twentyFourHour: twentyFourHour, padHour: padHour)
+        let s = TimeParts(date.addingTimeInterval(secondStep * steps), twentyFourHour: twentyFourHour, padHour: padHour)
+        return TimeParts(hour: h.hour, minute: m.minute, second: s.second, period: nil)
     }
 }
 
@@ -218,11 +235,63 @@ struct CardNumber: View {
     }
 }
 
+/// Book: the card flips around its vertical middle. A widget can't run a real 3D turn, but it does
+/// animate a view's width between timeline entries, as long as the view's text stays the same.
+/// So each card has three faces that take turns (by `index`, which counts the card's changes):
+/// - the current face is full width, showing the current value;
+/// - the next face is squashed to nothing and already shows the next value;
+/// - the last face is squashed to nothing and still shows the previous value.
+/// When the value changes, the last-current face narrows to the spine and then the next face widens
+/// out from it, which reads as the card turning over. Neither face's text changes while it moves
+/// (if it did, macOS would blur-fade it instead).
+struct BookCard: View {
+    let previous: String
+    let current: String
+    let next: String
+    let index: Int
+    let rect: CGRect
+    let digit: CGFloat
+    let look: Look
+    var seams = true
+
+    static let half = 0.28
+
+    func face(_ text: String, open: Bool) -> some View {
+        let radius = min(rect.width, rect.height) * 0.085
+        let line = max(1.5, min(rect.width, rect.height) * 0.007)
+        return ZStack {
+            RoundedRectangle(cornerRadius: radius, style: .continuous).fill(look.card)
+            Text(text)
+                .font(Digits.font(digit))
+                .foregroundStyle(look.ink)
+                .widgetAccentable()
+            if seams { Rectangle().fill(look.seam).frame(width: line) }
+        }
+        .frame(width: rect.width, height: rect.height)
+        .scaleEffect(x: open ? 1 : 0.001, y: 1, anchor: .center)
+        .animation(open ? .easeOut(duration: Self.half).delay(Self.half) : .easeIn(duration: Self.half), value: open)
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { j in
+                let role = ((j - index) % 3 + 3) % 3   // 0 current, 1 next, 2 previous
+                face(role == 0 ? current : role == 1 ? next : previous, open: role == 0)
+            }
+        }
+        .position(x: rect.midX, y: rect.midY)
+    }
+}
+
 /// The whole clock, drawn with plain SwiftUI shapes and text.
 /// (It used to be flattened into one bitmap, but macOS showed that bitmap as a blank grey slab.)
 /// In the Mac's monochrome mode the digits and colons are the accented part, so they stay bright.
 struct Picture: View {
     let time: TimeParts
+    /// Book only: the values one step earlier and later, and how many steps each card has changed (see BookCard).
+    var previous: TimeParts? = nil
+    var next: TimeParts? = nil
+    var indices: [Int] = []
     let layout: Layout
     let look: Look
     let size: CGSize
@@ -233,6 +302,12 @@ struct Picture: View {
         let values = [time.hour, time.minute, time.second]
         ZStack(alignment: .topLeading) {
             ForEach(Array(layout.cards.enumerated()), id: \.offset) { i, rect in
+              if animation == .book, let previous, let next {
+                let before = [previous.hour, previous.minute, previous.second]
+                let after = [next.hour, next.minute, next.second]
+                BookCard(previous: before[i], current: values[i], next: after[i], index: indices[i], rect: rect,
+                         digit: layout.digit, look: look, seams: seams)
+              } else {
                 let radius = min(rect.width, rect.height) * 0.085
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(look.card)
@@ -247,6 +322,7 @@ struct Picture: View {
                                height: animation == .book ? rect.height : line)
                         .position(x: rect.midX, y: rect.midY)
                 }
+              }
             }
             if let p = time.period, let rect = layout.cards.first {
                 let s = min(rect.width, rect.height)
@@ -280,7 +356,15 @@ struct ClockView: View {
             let count = showSeconds ? 3 : 2
             let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
             let look = Look(solidity: settings.solidity)
-            Picture(time: time, layout: layout, look: look, size: geo.size, animation: settings.animationStyle, seams: !accented)
+            let book = settings.animationStyle == .book
+            // Book: the value each card showed one step earlier, and a per-card step counter.
+            let secondStep: Double = 2
+            let local = entry.date.timeIntervalSince1970 + Double(TimeZone.current.secondsFromGMT(for: entry.date))
+            let previous = TimeParts.stepped(entry.date, by: -1, secondStep: secondStep, twentyFourHour: settings.twentyFourHour, padHour: book)
+            let next = TimeParts.stepped(entry.date, by: 1, secondStep: secondStep, twentyFourHour: settings.twentyFourHour, padHour: book)
+            let indices = [Int((local / 3600).rounded(.down)), Int((local / 60).rounded(.down)), Int((local / secondStep).rounded(.down))]
+            Picture(time: time, previous: book ? previous : nil, next: book ? next : nil, indices: indices, layout: layout, look: look,
+                    size: geo.size, animation: settings.animationStyle, seams: !accented)
         }
         .padding(8)
     }
