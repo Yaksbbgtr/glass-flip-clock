@@ -7,6 +7,9 @@
     <title>Flip Clock</title>
     <style>
       @font-face { font-family: "Oswald"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/Oswald-600.woff2") format("woff2"); }
+      /* Oswald with every digit the same width, so a two-digit number splits exactly between its digits
+         (the Book spine) and numbers don't shift sideways as they change. */
+      @font-face { font-family: "Flip Digits"; font-style: normal; font-weight: 600; font-display: block; src: url("fonts/FlipDigits-SemiBold.ttf") format("truetype"); }
       :root {
         color-scheme: dark;
         --bg: #000;
@@ -41,7 +44,8 @@
       .number {
         position: absolute; left: 0; right: 0; height: var(--size);
         display: grid; place-items: center;
-        font-size: calc(var(--size) * .86); font-weight: 600; line-height: 1; letter-spacing: -.01em;
+        font-family: "Flip Digits", var(--type);
+        font-size: calc(var(--size) * .86); font-weight: 600; line-height: 1; letter-spacing: 0;
         font-variant-numeric: tabular-nums; color: var(--ink);
       }
       .top .number, .flip-top .number { top: 0; }
@@ -225,7 +229,14 @@
         }, FLIP_MS);
       }
 
-      const hourText = now => { const h = now.getHours(); return is24 ? pad(h) : String(h % 12 || 12); };
+      // In Book mode a one-digit hour gets a blank leading leaf (a figure space, as wide as a digit),
+      // so the digit sits whole on the right page instead of being split by the spine.
+      const hourText = now => {
+        const h = now.getHours();
+        if (is24) return pad(h);
+        const t = String(h % 12 || 12);
+        return animation === 'book' && t.length === 1 ? '\u2007' + t : t;
+      };
       const minuteText = now => pad(now.getMinutes());
       const secondText = now => pad(now.getSeconds());
 
@@ -243,7 +254,7 @@
         if (showSeconds) flipTo(seconds, secondText(now));
         const period = now.getHours() < 12 ? 'AM' : 'PM';
         document.getElementById('period').textContent = is24 ? '' : period;
-        document.getElementById('sr-time').textContent = `${hourText(now)}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
+        document.getElementById('sr-time').textContent = `${hourText(now).trim()}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
       }
 
       const secSwitch = document.getElementById('sec-switch');
@@ -273,6 +284,7 @@
         if (!b) return;
         animation = b.dataset.anim;
         try { localStorage.setItem('clock-animation', animation); } catch (e) {}
+        hours.value = hourText(new Date());
         [hours, minutes, seconds].forEach(c => { c.el.classList.remove('flipping'); setAll(c, c.value); });
         applyAnimation();
       });
