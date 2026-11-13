@@ -46,6 +46,14 @@ enum OnOffChoice: String, AppEnum {
     ]
 }
 
+enum AnimationChoice: String, AppEnum {
+    case app, roll, book
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Animation")
+    static var caseDisplayRepresentations: [AnimationChoice: DisplayRepresentation] = [
+        .app: "Use app setting", .roll: "Roll", .book: "Book",
+    ]
+}
+
 struct ClockConfig: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Flip Clock"
     static var description = IntentDescription("Override the app's Widget Settings for this widget.")
@@ -59,12 +67,16 @@ struct ClockConfig: WidgetConfigurationIntent {
     @Parameter(title: "Seconds", default: .app)
     var seconds: OnOffChoice
 
+    @Parameter(title: "Animation", default: .app)
+    var animation: AnimationChoice
+
     /// The app's settings with this widget's overrides applied.
     func resolved(over base: WidgetSettings) -> WidgetSettings {
         var s = base
         switch look { case .clear: s.solidity = 0; case .solid: s.solidity = 1; case .app: break }
         switch twentyFourHour { case .on: s.twentyFourHour = true; case .off: s.twentyFourHour = false; case .app: break }
         switch seconds { case .on: s.showSeconds = true; case .off: s.showSeconds = false; case .app: break }
+        switch animation { case .roll: s.animationStyle = .roll; case .book: s.animationStyle = .book; case .app: break }
         return s
     }
 }
@@ -144,19 +156,64 @@ struct Look {
 }
 
 struct TimeParts {
-    let hour: String, minute: String, period: String?
-    init(_ date: Date, twentyFourHour: Bool) {
+    let hour: String, minute: String, second: String, period: String?
+    /// `padHour` gives one-digit 12-hour times a leading zero (08), as Book mode does in the app.
+    init(_ date: Date, twentyFourHour: Bool, padHour: Bool = false) {
         let cal = Calendar.current
         let h = cal.component(.hour, from: date)
-        hour = twentyFourHour ? String(format: "%02d", h) : String(h % 12 == 0 ? 12 : h % 12)
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        hour = twentyFourHour || padHour ? String(format: "%02d", twentyFourHour ? h : h12) : String(h12)
         minute = String(format: "%02d", cal.component(.minute, from: date))
+        second = String(format: "%02d", cal.component(.second, from: date))
         period = twentyFourHour ? nil : (h < 12 ? "AM" : "PM")
     }
 }
 
 // MARK: - Views
 
-/// Everything except the live seconds, drawn with plain SwiftUI shapes and text.
+/// One card's number. Widgets only animate SwiftUI's built-in transitions (a true 3D flap or page
+/// turn is ignored), so each animation uses the closest built-in one:
+/// - Roll: the digits roll and blur into the new number.
+/// - Book: each changing digit slides in from the right as the old one slides out to the left,
+///   like a page turning over the spine down the middle of the card.
+struct CardNumber: View {
+    let text: String
+    let rect: CGRect
+    let digit: CGFloat
+    let ink: Color
+    let animation: WidgetSettings.Animation
+
+    var body: some View {
+        switch animation {
+        case .roll:
+            Text(text)
+                .font(Digits.font(digit))
+                .foregroundStyle(ink)
+                .widgetAccentable()
+                .contentTransition(.numericText())
+                .frame(width: rect.width, height: rect.height)
+                .clipped()
+                .position(x: rect.midX, y: rect.midY)
+        case .book:
+            let cell = Digits.width(of: "0", size: digit)
+            HStack(spacing: 0) {
+                ForEach(Array(text.enumerated()), id: \.offset) { _, ch in
+                    Text(String(ch))
+                        .font(Digits.font(digit))
+                        .foregroundStyle(ink)
+                        .widgetAccentable()
+                        .id(String(ch))
+                        .transition(.push(from: .trailing))
+                        .frame(width: cell, height: rect.height)
+                        .clipped()
+                }
+            }
+            .position(x: rect.midX, y: rect.midY)
+        }
+    }
+}
+
+/// The whole clock, drawn with plain SwiftUI shapes and text.
 /// (It used to be flattened into one bitmap, but macOS showed that bitmap as a blank grey slab.)
 /// In the Mac's monochrome mode the digits and colons are the accented part, so they stay bright.
 struct Picture: View {
@@ -164,9 +221,11 @@ struct Picture: View {
     let layout: Layout
     let look: Look
     let size: CGSize
+    let animation: WidgetSettings.Animation
     var seams = true
 
     var body: some View {
+        let values = [time.hour, time.minute, time.second]
         ZStack(alignment: .topLeading) {
             ForEach(Array(layout.cards.enumerated()), id: \.offset) { i, rect in
                 let radius = min(rect.width, rect.height) * 0.085
@@ -174,31 +233,23 @@ struct Picture: View {
                     .fill(look.card)
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
-                if i < 2 {
-                    // When the time changes the digits roll and blur into the new number.
-                    // (Widgets only animate built-in transitions; a true 3D flap fold is ignored.)
-                    Text(i == 0 ? time.hour : time.minute)
-                        .font(Digits.font(layout.digit))
-                        .foregroundStyle(look.ink)
-                        .widgetAccentable()
-                        .contentTransition(.numericText())
-                        .frame(width: rect.width, height: rect.height)
-                        .clipped()
-                        .position(x: rect.midX, y: rect.midY)
-                }
+                CardNumber(text: values[i], rect: rect, digit: layout.digit, ink: look.ink, animation: animation)
                 if seams {
+                    // Flip/Roll cards split across the middle; Book cards split down the spine.
+                    let line = max(1.5, min(rect.width, rect.height) * 0.007)
                     Rectangle().fill(look.seam)
-                        .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
+                        .frame(width: animation == .book ? line : rect.width,
+                               height: animation == .book ? rect.height : line)
                         .position(x: rect.midX, y: rect.midY)
                 }
             }
             if let p = time.period, let rect = layout.cards.first {
                 let s = min(rect.width, rect.height)
                 Text(p)
-                    .font(Digits.font(s * 0.085))
+                    .font(Digits.font(s * 0.075))
                     .foregroundStyle(look.ink)
                     .widgetAccentable()
-                    .position(x: rect.minX + rect.width * 0.06 + s * 0.09, y: rect.minY + rect.height * 0.07 + s * 0.045)
+                    .position(x: rect.minX + rect.width * 0.055 + s * 0.08, y: rect.minY + rect.height * 0.045 + s * 0.04)
             }
             ForEach(Array(layout.colons.enumerated()), id: \.offset) { _, pt in
                 Text(":").font(Digits.font(layout.digit * 0.6)).foregroundStyle(look.ink).widgetAccentable().position(pt)
@@ -220,28 +271,11 @@ struct ClockView: View {
             // The seconds still show there; they may pause while macOS dims the desktop.
             let accented = renderingMode == .accented
             let showSeconds = settings.showSeconds
-            let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour)
+            let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour, padHour: settings.animationStyle == .book)
             let count = showSeconds ? 3 : 2
             let layout = Layout(size: geo.size, count: count, stacked: family == .systemSmall)
             let look = Look(solidity: settings.solidity)
-            ZStack(alignment: .topLeading) {
-                Picture(time: time, layout: layout, look: look, size: geo.size, seams: !accented)
-                if showSeconds, let rect = layout.cards.last {
-                    Text(String(format: "%02d", Calendar.current.component(.second, from: entry.date)))
-                        .font(Digits.font(layout.digit))
-                        .foregroundStyle(look.ink)
-                        .widgetAccentable()
-                        .contentTransition(.numericText())
-                        .frame(width: rect.width, height: rect.height)
-                        .clipped()
-                        .position(x: rect.midX, y: rect.midY)
-                    if !accented {
-                        Rectangle().fill(look.seam)
-                            .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
-                            .position(x: rect.midX, y: rect.midY)
-                    }
-                }
-            }
+            Picture(time: time, layout: layout, look: look, size: geo.size, animation: settings.animationStyle, seams: !accented)
         }
         .padding(8)
     }

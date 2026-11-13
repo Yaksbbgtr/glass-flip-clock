@@ -34,13 +34,24 @@ struct WidgetSettingsView: View {
                 Toggle("24-hour time", isOn: $settings.twentyFourHour).onChange(of: settings.twentyFourHour) { apply() }
                 Toggle("Seconds", isOn: $settings.showSeconds).onChange(of: settings.showSeconds) { apply() }
             }
+            Section("Animation") {
+                Picker("Animation", selection: $settings.animationStyle) {
+                    Text("Roll").tag(WidgetSettings.Animation.roll)
+                    Text("Book").tag(WidgetSettings.Animation.book)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: settings.animationStyle) { apply() }
+                Text("Roll: the digits roll into the new number. Book: each new digit slides in from the right like a turning page. (Widgets can't do the app's 3D flip or page turn.)")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section {
                 Text("Add the widget: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.\n\nmacOS dims widgets and pauses their live text while another app is in front, so the seconds only tick when the desktop is active. For the widget to always look like the app: System Settings → Desktop & Dock → Widgets → Widget style → Full color.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 440)
+        .frame(width: 440, height: 560)
     }
 }
 
@@ -68,6 +79,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reload), name: NSWorkspace.didWakeNotification, object: nil)
         NSApp.activate(ignoringOtherApps: true)
         if CommandLine.arguments.contains("--widget-settings") { showWidgetSettings() }
+        // Redraw the widget with this version's code and the current settings (matters after an update).
+        WidgetCenter.shared.reloadTimelines(ofKind: "FlipClock")
     }
 
     // The clock page's ☰ menu has a "Widget settings…" item that sends this message.
@@ -157,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @objc func showWidgetSettings() {
         if settingsWindow == nil {
-            let size = NSSize(width: 440, height: 440)
+            let size = NSSize(width: 440, height: 560)
             let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "Widget Settings"
             let host = NSHostingView(rootView: WidgetSettingsView())
