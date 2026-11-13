@@ -51,7 +51,7 @@
       .top .number, .flip-top .number { top: 0; }
       .bottom .number, .flip-bottom .number { bottom: 0; }
       .seam { position: absolute; left: 0; right: 0; top: calc(50% - var(--seam) / 2); height: var(--seam); background: var(--bg); z-index: 4; }
-      .period { position: absolute; z-index: 5; left: 7%; top: 9%; font-size: calc(var(--size) * .085); line-height: 1; letter-spacing: .01em; }
+      .period { position: absolute; z-index: 5; left: 6.5%; top: 5.5%; font-size: calc(var(--size) * .075); line-height: 1; letter-spacing: .01em; }
       .period:empty { display: none; }
 
       .flip { z-index: 3; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
@@ -229,13 +229,13 @@
         }, FLIP_MS);
       }
 
-      // In Book mode a one-digit hour gets a blank leading leaf (a figure space, as wide as a digit),
-      // so the digit sits whole on the right page instead of being split by the spine.
+      // In Book mode a one-digit hour gets a leading zero (08), so each digit sits whole on its own
+      // page instead of being split by the spine.
       const hourText = now => {
         const h = now.getHours();
         if (is24) return pad(h);
-        const t = String(h % 12 || 12);
-        return animation === 'book' && t.length === 1 ? '\u2007' + t : t;
+        const t = h % 12 || 12;
+        return animation === 'book' ? pad(t) : String(t);
       };
       const minuteText = now => pad(now.getMinutes());
       const secondText = now => pad(now.getSeconds());
@@ -254,7 +254,7 @@
         if (showSeconds) flipTo(seconds, secondText(now));
         const period = now.getHours() < 12 ? 'AM' : 'PM';
         document.getElementById('period').textContent = is24 ? '' : period;
-        document.getElementById('sr-time').textContent = `${hourText(now).trim()}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
+        document.getElementById('sr-time').textContent = `${hourText(now)}:${minuteText(now)}${is24 ? '' : ' ' + period}`;
       }
 
       const secSwitch = document.getElementById('sec-switch');
