@@ -94,8 +94,10 @@ struct ClockProvider: AppIntentTimelineProvider {
         ClockEntry(date: .now, settings: config.resolved(over: WidgetSettings.load()))
     }
 
-    // One entry per minute for the next two hours, or one per second for the next 15 minutes
-    // when the seconds are shown (so each second can roll like the other digits). WidgetKit shows
+    // One entry per minute for the next two hours, or one per second for the next 5 minutes
+    // when the seconds are shown (so each second can animate like the other digits). macOS refuses
+    // a timeline whose archive is too big (15 minutes of Book-mode seconds was ~11 MB and left the
+    // widget blank), so the per-second timeline is kept short. WidgetKit shows
     // each entry at its moment and asks for a fresh timeline when they run out (or when the app
     // changes the settings).
     func timeline(for config: ClockConfig, in context: Context) async -> Timeline<ClockEntry> {
@@ -104,7 +106,7 @@ struct ClockProvider: AppIntentTimelineProvider {
         let perSecond = settings.showSeconds
         let unit: Calendar.Component = perSecond ? .second : .minute
         let start = cal.dateInterval(of: unit, for: .now)?.start ?? .now
-        let entries = (0..<(perSecond ? 900 : 120)).compactMap { i -> ClockEntry? in
+        let entries = (0..<(perSecond ? 300 : 120)).compactMap { i -> ClockEntry? in
             guard let d = cal.date(byAdding: unit, value: i, to: start) else { return nil }
             return ClockEntry(date: d, settings: settings)
         }

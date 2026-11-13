@@ -33,8 +33,8 @@ targets:
         CFBundleName: Flip Clock
         CFBundleDisplayName: Flip Clock
         CFBundleIconFile: AppIcon
-        CFBundleShortVersionString: "1.25"
-        CFBundleVersion: "26"
+        CFBundleShortVersionString: "1.26"
+        CFBundleVersion: "27"
         LSApplicationCategoryType: public.app-category.utilities
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication
@@ -65,8 +65,8 @@ targets:
       properties:
         CFBundleName: Flip Clock Widget
         CFBundleDisplayName: Flip Clock
-        CFBundleShortVersionString: "1.25"
-        CFBundleVersion: "26"
+        CFBundleShortVersionString: "1.26"
+        CFBundleVersion: "27"
         NSHumanReadableCopyright: Flip Clock
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
