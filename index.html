@@ -58,17 +58,17 @@
       @keyframes fold { to { transform: rotateX(-90deg); filter: brightness(.45); } }
       @keyframes unfold { from { filter: brightness(.6); } to { transform: rotateX(0); filter: none; } }
 
-      /* Roll: a whole-card face whose changing digits roll up and blur into the new ones. */
+      /* Roll: a whole-card face where each changing digit rolls like a drum: the old digit
+         slides up out of the top of the card while the new one slides up in from the bottom. */
       .roller { display: none; position: absolute; inset: 0; z-index: 3; overflow: hidden; border-radius: var(--radius); background: var(--card); }
-      body.anim-roll .roller { display: grid; place-items: center; }
+      body.anim-roll .roller { display: block; }
       body.anim-roll .half, body.anim-roll .flip { visibility: hidden; }
-      .roller .number { position: static; height: auto; display: flex; }
-      .slot { position: relative; display: inline-block; }
-      .slot .old { position: absolute; left: 0; top: 0; }
-      .slot.rolling .new { animation: roll-in var(--flip-ms) cubic-bezier(.2,.8,.3,1) both; }
-      .slot.rolling .old { animation: roll-out var(--flip-ms) cubic-bezier(.5,0,.8,.4) both; }
-      @keyframes roll-in { from { transform: translateY(55%); opacity: 0; filter: blur(calc(var(--size) * .03)); } to { transform: none; opacity: 1; filter: none; } }
-      @keyframes roll-out { to { transform: translateY(-55%); opacity: 0; filter: blur(calc(var(--size) * .03)); } }
+      .roller .number { position: absolute; inset: 0; height: auto; display: flex; justify-content: center; }
+      .slot { height: var(--size); overflow: hidden; }
+      .strip { display: flex; flex-direction: column; align-items: center; }
+      .strip > span { display: grid; place-items: center; height: var(--size); }
+      .slot.rolling .strip { animation: roll var(--flip-ms) cubic-bezier(.55,0,.25,1) both; }
+      @keyframes roll { to { transform: translateY(-50%); } }
 
       /* Animation picker in the menu. */
       .choice { padding: 10px 14px 12px; }
@@ -164,14 +164,16 @@
         setRoll(card, v);
       }
 
-      // The roll face holds one slot per character; a slot that changes rolls its old digit out.
+      // The roll face holds one slot per character. A slot whose character changes holds the old
+      // character above the new one and rolls up by one character. If the number of characters
+      // changes (12 → 1), the whole number rolls as one.
       function setRoll(card, v, old) {
-        const slots = [...v].map((ch, i) => {
-          const prev = old && old.length === v.length ? old[i] : old ? '' : ch;
-          const changed = old !== undefined && prev !== ch;
-          return `<span class="slot${changed ? ' rolling' : ''}">${changed && prev ? `<span class="old">${prev}</span>` : ''}<span class="new">${ch}</span></span>`;
-        });
-        card.roll.innerHTML = slots.join('');
+        const slot = (from, to) => from === undefined || from === to
+          ? `<span class="slot"><span class="strip"><span>${to}</span></span></span>`
+          : `<span class="slot rolling"><span class="strip"><span>${from}</span><span>${to}</span></span></span>`;
+        card.roll.innerHTML = old !== undefined && old.length !== v.length
+          ? slot(old, v)
+          : [...v].map((ch, i) => slot(old && old[i], ch)).join('');
       }
 
       let animation = 'flip';
