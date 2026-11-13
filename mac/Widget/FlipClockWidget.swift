@@ -82,14 +82,18 @@ struct ClockProvider: AppIntentTimelineProvider {
         ClockEntry(date: .now, settings: config.resolved(over: WidgetSettings.load()))
     }
 
-    // One entry per minute for the next two hours; WidgetKit shows each at the right moment
-    // and asks for a fresh timeline when they run out (or when the app changes the settings).
+    // One entry per minute for the next two hours, or one per second for the next 15 minutes
+    // when the seconds are shown (so each second can roll like the other digits). WidgetKit shows
+    // each entry at its moment and asks for a fresh timeline when they run out (or when the app
+    // changes the settings).
     func timeline(for config: ClockConfig, in context: Context) async -> Timeline<ClockEntry> {
         let settings = config.resolved(over: WidgetSettings.load())
         let cal = Calendar.current
-        let start = cal.dateInterval(of: .minute, for: .now)?.start ?? .now
-        let entries = (0..<120).compactMap { i -> ClockEntry? in
-            guard let d = cal.date(byAdding: .minute, value: i, to: start) else { return nil }
+        let perSecond = settings.showSeconds
+        let unit: Calendar.Component = perSecond ? .second : .minute
+        let start = cal.dateInterval(of: unit, for: .now)?.start ?? .now
+        let entries = (0..<(perSecond ? 900 : 120)).compactMap { i -> ClockEntry? in
+            guard let d = cal.date(byAdding: unit, value: i, to: start) else { return nil }
             return ClockEntry(date: d, settings: settings)
         }
         return Timeline(entries: entries, policy: .atEnd)
@@ -204,33 +208,6 @@ struct Picture: View {
     }
 }
 
-/// Widgets can't redraw every second, but a timer Text ticks live. It counts "0:00, 0:01, …"
-/// from the start of the minute; the view shows only the last two digits.
-/// macOS draws nothing at all for a timer given .fixedSize(), so the timer gets a fixed frame
-/// wide enough for "0:00" (text sits at its left edge), is shifted left past the "0:",
-/// and is clipped to two digits.
-struct SecondsCounter: View {
-    let minuteStart: Date
-    let rect: CGRect
-    let digit: CGFloat
-    let color: Color
-
-    var body: some View {
-        let prefix = Digits.width(of: "0:", size: digit)
-        let full = Digits.width(of: "0:00", size: digit)
-        let seconds = Digits.width(of: "00", size: digit)
-        Text(timerInterval: minuteStart...minuteStart.addingTimeInterval(86_400), countsDown: false, showsHours: false)
-            .font(Digits.font(digit))
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .frame(width: full * 1.15, alignment: .leading)
-            .offset(x: -prefix)
-            .frame(width: seconds, alignment: .leading)
-            .clipped()
-            .position(x: rect.midX, y: rect.midY)
-    }
-}
-
 struct ClockView: View {
     let entry: ClockEntry
     @Environment(\.widgetFamily) private var family
@@ -250,9 +227,14 @@ struct ClockView: View {
             ZStack(alignment: .topLeading) {
                 Picture(time: time, layout: layout, look: look, size: geo.size, seams: !accented)
                 if showSeconds, let rect = layout.cards.last {
-                    // Live text can't be part of the picture.
-                    SecondsCounter(minuteStart: entry.date, rect: rect, digit: layout.digit, color: look.ink)
+                    Text(String(format: "%02d", Calendar.current.component(.second, from: entry.date)))
+                        .font(Digits.font(layout.digit))
+                        .foregroundStyle(look.ink)
                         .widgetAccentable()
+                        .contentTransition(.numericText())
+                        .frame(width: rect.width, height: rect.height)
+                        .clipped()
+                        .position(x: rect.midX, y: rect.midY)
                     if !accented {
                         Rectangle().fill(look.seam)
                             .frame(width: rect.width, height: max(1.5, rect.height * 0.007))
