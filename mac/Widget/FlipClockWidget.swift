@@ -176,8 +176,9 @@ struct TimeParts {
 /// One card's number. Widgets only animate SwiftUI's built-in transitions (a true 3D flap or page
 /// turn is ignored), so each animation uses the closest built-in one:
 /// - Roll: the digits roll and blur into the new number.
-/// - Book: each changing digit slides in from the right as the old one slides out to the left,
-///   like a page turning over the spine down the middle of the card.
+/// - Book: each changing digit fades out with a short nudge to the left while the new one nudges in
+///   from the right, like a page turning over the spine down the middle of the card. (A full slide
+///   looked wrong: widgets don't clip during transitions, so the old digit slid over its neighbour.)
 struct CardNumber: View {
     let text: String
     let rect: CGRect
@@ -205,7 +206,9 @@ struct CardNumber: View {
                         .foregroundStyle(ink)
                         .widgetAccentable()
                         .id(String(ch))
-                        .transition(.push(from: .trailing))
+                        .transition(.asymmetric(
+                            insertion: .offset(x: cell * 0.12).combined(with: .opacity),
+                            removal: .offset(x: -cell * 0.12).combined(with: .opacity)))
                         .frame(width: cell, height: rect.height)
                         .clipped()
                 }

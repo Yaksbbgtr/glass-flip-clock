@@ -42,7 +42,7 @@ struct WidgetSettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .onChange(of: settings.animationStyle) { apply() }
-                Text("Roll: the digits roll into the new number. Book: each new digit slides in from the right like a turning page. (Widgets can't do the app's 3D flip or page turn.)")
+                Text("Roll: the digits roll into the new number. Book: each new digit fades in with a small nudge from the right, on cards split down the middle. (Widgets can't do the app's 3D flip or page turn.)")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
