@@ -19,6 +19,6 @@ brew install xcodegen   # once
 ./mac/install.sh
 ```
 
-That produces `mac/build/Flip Clock.app`. Drag it into **Applications** and open it once. Then right-click the desktop → **Edit Widgets…**, search for *Flip Clock*, and drag the widget onto the desktop or Notification Center.
+That builds the app, installs it in **Applications** and opens it once. Then right-click the desktop → **Edit Widgets…**, search for *Flip Clock*, and drag the widget onto the desktop or Notification Center.
 
 Needs Xcode. The app is signed for your own Mac only (ad-hoc); to share it with other people you'd need an Apple Developer account for proper signing and notarization.
