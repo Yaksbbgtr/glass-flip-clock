@@ -20,4 +20,10 @@ pluginkit -a "$DEST/Contents/PlugIns/FlipClockWidget.appex"
 pkill -x FlipClockWidget || true
 sleep 1
 killall chronod 2>/dev/null || true
+sleep 2
+# macOS only trusts (and can read the widget settings of) an app that has been opened once since it was
+# installed. Until then the widget draws its first few minutes, then freezes at its next refresh.
+open -g -j "$DEST"
+sleep 6
+osascript -e 'quit app "Flip Clock"' >/dev/null 2>&1 || true
 echo "Installed: $DEST"

@@ -16,7 +16,7 @@ The `mac/` folder builds a native macOS app that contains two things:
 
 ```sh
 brew install xcodegen   # once
-./mac/build.sh
+./mac/install.sh
 ```
 
 That produces `mac/build/Flip Clock.app`. Drag it into **Applications** and open it once. Then right-click the desktop → **Edit Widgets…**, search for *Flip Clock*, and drag the widget onto the desktop or Notification Center.
