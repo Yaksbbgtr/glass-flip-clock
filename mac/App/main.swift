@@ -46,7 +46,7 @@ struct WidgetSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
-                Text("Add the widget: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.\n\nmacOS dims widgets while another app is in front. Roll's seconds keep ticking every second; Book's step by two. For the widget to always look like the app: System Settings → Desktop & Dock → Widgets → Widget style → Full color.")
+                Text("Add the widget: right-click the desktop → Edit Widgets… → Flip Clock. Right-click a widget → Edit “Flip Clock” to override these settings for just that widget.\n\nmacOS dims widgets while another app is in front. It only redraws them about every 2 seconds, so the seconds step by two. For the widget to always look like the app: System Settings → Desktop & Dock → Widgets → Widget style → Full color.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
