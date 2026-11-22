@@ -103,10 +103,11 @@ struct ClockProvider: AppIntentTimelineProvider {
     func timeline(for config: ClockConfig, in context: Context) async -> Timeline<ClockEntry> {
         let settings = config.resolved(over: WidgetSettings.load())
         let cal = Calendar.current
+        // macOS only redraws a widget about every 2 seconds, so the seconds timeline steps by two.
+        // Roll still shows every second (each entry ticks the seconds drum twice, see SecondsDrum);
+        // Book flips once per entry.
         let perSecond = settings.showSeconds
-        // Book flips need macOS to show every entry (each one flips the card the other way), and
-        // macOS only redraws about every 2 seconds, so Book's seconds step by two.
-        let step = perSecond && settings.animationStyle == .book ? 2 : 1
+        let step = perSecond ? 2 : 1
         let unit: Calendar.Component = perSecond ? .second : .minute
         var start = cal.dateInterval(of: unit, for: .now)?.start ?? .now
         if step == 2 { start = Date(timeIntervalSince1970: (start.timeIntervalSince1970 / 2).rounded(.down) * 2) }
@@ -235,6 +236,69 @@ struct CardNumber: View {
     }
 }
 
+/// Roll seconds that tick every second although macOS only redraws a widget every ~2 seconds.
+/// (Live system text would tick by itself, but macOS pauses it while another app is in front.)
+/// The ones digit is a drum: a column of digits seen through the card. Each 2-second entry moves it
+/// two digits with one animation whose timing curve is fast–hold–fast, so it reads as two separate
+/// ticks: one right away and one about a second later. (Widgets ignore animation delays, so the
+/// second tick can't simply be delayed.) Two identical
+/// columns take turns: while one is showing, the other rewinds unseen, and they swap when both show
+/// the same digit, so the visible drum never rolls backwards.
+struct SecondsDrum: View {
+    /// Local seconds since the epoch at the entry (always even).
+    let count: Int
+    let rect: CGRect
+    let digit: CGFloat
+    let ink: Color
+
+    /// Bezier (0,1)(1,0) over 1.3 s: most of the first step within ~0.3 s, a hold, then the second
+    /// step between ~1.0 s and 1.3 s, then still until the next entry.
+    static let tickTick = Animation.timingCurve(0, 1, 1, 0, duration: 1.3)
+
+    var body: some View {
+        let cell = Digits.width(of: "0", size: digit)
+        let tens = String((count % 60) / 10)
+        let h = rect.height
+        // At rest the drum shows the odd second; halfway through its move it shows the even one.
+        let shown = count + 1
+        HStack(spacing: 0) {
+            Text(tens)
+                .font(Digits.font(digit))
+                .foregroundStyle(ink)
+                .widgetAccentable()
+                .contentTransition(.numericText())
+                .frame(width: cell, height: h)
+            ZStack(alignment: .top) {
+                ForEach(0..<2, id: \.self) { j in
+                    // Each column covers ten seconds of every twenty, then rewinds while hidden.
+                    let phase = (((shown - 10 * j) % 20) + 20) % 20
+                    let row = phase <= 13 ? phase : phase - 20      // -5...13
+                    let visible = phase < 12      // overlaps the other column, so swapping never dims
+                    VStack(spacing: 0) {
+                        ForEach(0..<22, id: \.self) { i in         // rows -8...13
+                            Text(String((i + 2) % 10))
+                                .font(Digits.font(digit))
+                                .foregroundStyle(ink)
+                                .widgetAccentable()
+                                .frame(width: cell, height: h)
+                        }
+                    }
+                    .offset(y: -CGFloat(row + 8) * h)
+                    .animation(Self.tickTick, value: row)
+                    .frame(width: cell, height: h, alignment: .top)
+                    .opacity(visible ? 1 : 0)
+                    .animation(.linear(duration: 0.02), value: visible)
+                }
+            }
+            .frame(width: cell, height: h, alignment: .top)
+            .clipped()
+        }
+        .frame(width: rect.width, height: h)
+        .clipped()
+        .position(x: rect.midX, y: rect.midY)
+    }
+}
+
 /// Book: the card flips around its vertical middle. A widget can't run a real 3D turn, but it does
 /// animate a view's width between timeline entries, as long as the view's text stays the same.
 /// So each card has three faces that take turns (by `index`, which counts the card's changes):
@@ -292,6 +356,8 @@ struct Picture: View {
     var previous: TimeParts? = nil
     var next: TimeParts? = nil
     var indices: [Int] = []
+    /// Roll only: local seconds since the epoch, for the seconds drum.
+    var secondsCount: Int? = nil
     let layout: Layout
     let look: Look
     let size: CGSize
@@ -313,7 +379,11 @@ struct Picture: View {
                     .fill(look.card)
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
-                CardNumber(text: values[i], rect: rect, digit: layout.digit, ink: look.ink, animation: animation)
+                if i == 2, animation == .roll, let secondsCount {
+                    SecondsDrum(count: secondsCount, rect: rect, digit: layout.digit, ink: look.ink)
+                } else {
+                    CardNumber(text: values[i], rect: rect, digit: layout.digit, ink: look.ink, animation: animation)
+                }
                 if seams {
                     // Flip/Roll cards split across the middle; Book cards split down the spine.
                     let line = max(1.5, min(rect.width, rect.height) * 0.007)
@@ -349,7 +419,7 @@ struct ClockView: View {
         GeometryReader { geo in
             let settings = entry.settings
             // Monochrome (accented) mode: either Widget style is set to Monochrome, or another app is in front.
-            // The seconds still show there; they may pause while macOS dims the desktop.
+            // The seconds still show and tick there.
             let accented = renderingMode == .accented
             let showSeconds = settings.showSeconds
             let time = TimeParts(entry.date, twentyFourHour: settings.twentyFourHour, padHour: settings.animationStyle == .book)
@@ -363,7 +433,8 @@ struct ClockView: View {
             let previous = TimeParts.stepped(entry.date, by: -1, secondStep: secondStep, twentyFourHour: settings.twentyFourHour, padHour: book)
             let next = TimeParts.stepped(entry.date, by: 1, secondStep: secondStep, twentyFourHour: settings.twentyFourHour, padHour: book)
             let indices = [Int((local / 3600).rounded(.down)), Int((local / 60).rounded(.down)), Int((local / secondStep).rounded(.down))]
-            Picture(time: time, previous: book ? previous : nil, next: book ? next : nil, indices: indices, layout: layout, look: look,
+            Picture(time: time, previous: book ? previous : nil, next: book ? next : nil, indices: indices,
+                    secondsCount: Int(local.rounded(.down)), layout: layout, look: look,
                     size: geo.size, animation: settings.animationStyle, seams: !accented)
         }
         .padding(8)
